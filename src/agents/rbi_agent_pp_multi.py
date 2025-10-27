@@ -42,6 +42,9 @@ IMPORTANT: Each thread is fully independent and won't interfere with others!
 import subprocess
 import json
 from pathlib import Path
+import sys
+import os
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 
 # Core imports
 import os
