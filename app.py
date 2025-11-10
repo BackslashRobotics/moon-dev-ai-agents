@@ -1,4 +1,4 @@
-# Version 94
+# Version 117
 # ============================================================================
 # VERSION UPDATE CHECKLIST - READ THIS BEFORE EDITING!
 # ============================================================================
@@ -69,6 +69,21 @@ AGENT_SCRIPT = os.path.join("src", "agents", "cdem_agent.py")
 
 # Ensure logs directory exists
 os.makedirs("logs", exist_ok=True)
+
+# Clear app logs and grok logs on startup for fresh sessions
+try:
+    with open(APP_LOG_PATH, "w") as f:
+        f.write("")  # Clear app logs
+    print("✓ App logs cleared for new session")
+except:
+    pass  # File might not exist yet
+
+try:
+    with open(GROK_LOG_PATH, "w") as f:
+        f.write("[]")  # Clear grok logs with empty JSON array
+    print("✓ Grok logs cleared for new session")
+except:
+    pass  # File might not exist yet
 
 
 class ToolTip:
@@ -391,6 +406,9 @@ class CDEMApp:
         # Setup UI (after title bar)
         self.notebook = ttk.Notebook(self.root)
         self.notebook.pack(expand=True, fill="both")
+        
+        # Apply preferences after UI is set up (scheduled after notebook tabs are created)
+        self.root.after(100, self.apply_loaded_preferences)
 
         self.setup_dashboard_tab()
         self.setup_config_tab()
@@ -809,8 +827,8 @@ class CDEMApp:
             # Default preferences
             defaults = {
                 "config_tab": {
-                    "stock_text_height": 30, 
                     "stock_text_width": 30,
+                    "stock_names_width": 30,
                     "save_notification_duration_ms": 5000
                 },
                 "dashboard_tab": {"log_font_size": 10},
@@ -823,6 +841,39 @@ class CDEMApp:
             with open(PREFERENCES_PATH, "w") as f:
                 json.dump(defaults, f, indent=4)
             return defaults
+
+    def apply_loaded_preferences(self):
+        """Apply loaded preferences to UI elements."""
+        try:
+            # Apply Terminal Logs preferences
+            if hasattr(self, 'logs_text'):
+                font_size = self.preferences.get("logs_tab", {}).get("font_size", 10)
+                self.logs_text.config(font=("Courier", font_size))
+            
+            # Apply Grok Logs preferences
+            if hasattr(self, 'grok_logs_text'):
+                grok_prefs = self.preferences.get("grok_logs_tab", {})
+                font_size = grok_prefs.get("font_size", 9)
+                self.grok_logs_text.config(font=("Courier", font_size))
+            
+            # Apply App Logs preferences
+            if hasattr(self, 'app_logs_text'):
+                app_logs_prefs = self.preferences.get("app_logs_tab", {})
+                font_size = app_logs_prefs.get("font_size", 9)
+                self.app_logs_text.config(font=("Courier", font_size))
+            
+            # Apply Config preferences
+            if hasattr(self, 'stock_text'):
+                config_prefs = self.preferences.get("config_tab", {})
+                ticker_width = config_prefs.get("stock_text_width", 30)
+                names_width = config_prefs.get("stock_names_width", 30)
+                self.stock_text.config(width=ticker_width)
+                if hasattr(self, 'name_text'):
+                    self.name_text.config(width=names_width)
+            
+            self.log_app_event("SUCCESS", "Preferences applied on startup")
+        except Exception as e:
+            self.log_app_event("ERROR", f"Error applying preferences: {e}")
 
     def show_config_status(self, message, status="success"):
         """Show temporary status message below save button (replaces popup)"""
@@ -1136,6 +1187,11 @@ class CDEMApp:
 
         # Stock Universe
         ttk.Label(right_frame, text="Stock Universe:").grid(row=0, column=0, sticky="w")
+        
+        # Status indicator for fetching stock data
+        self.stock_fetch_status = tk.Label(right_frame, text="", bg="black", fg="yellow", font=("Arial", 9))
+        self.stock_fetch_status.grid(row=0, column=0, sticky="e", padx=5)
+        
         stock_frame = ttk.Frame(right_frame)
         stock_frame.grid(row=1, column=0, sticky="nsew")
         right_frame.rowconfigure(1, weight=1)
@@ -1148,8 +1204,8 @@ class CDEMApp:
         
         self.stock_text = tk.Text(
             tickers_container,
-            height=self.preferences["config_tab"].get("stock_text_height", 30),
-            width=15,
+            height=30,
+            width=self.preferences["config_tab"].get("stock_text_width", 15),
             bg="black",
             fg="cyan",
             insertbackground="white",
@@ -1178,8 +1234,8 @@ class CDEMApp:
         
         self.name_text = tk.Text(
             names_container,
-            height=self.preferences["config_tab"].get("stock_text_height", 30),
-            width=30,
+            height=30,
+            width=self.preferences["config_tab"].get("stock_names_width", 30),
             bg="black",
             fg="white",
             insertbackground="white",
@@ -1218,6 +1274,7 @@ Respond with ONLY the hex color code (e.g., #FF6B35). No explanations, just the 
             
             system_prompt = "You are a color specialist. Return only hex color codes in the format #RRGGBB."
             
+            # Call Grok - stdout/stderr are suppressed in background thread to prevent encoding errors
             response = grok_model.generate_response(
                 system_prompt=system_prompt,
                 user_content=prompt,
@@ -1238,70 +1295,179 @@ Respond with ONLY the hex color code (e.g., #FF6B35). No explanations, just the 
             return "#FFFFFF"  # Fallback to white
             
         except Exception as e:
-            print(f"❌ Error getting color from Grok for {ticker}: {e}")
             return "#FFFFFF"  # Fallback to white
     
     def update_stock_names(self):
-        self.name_text.config(state="normal")
-        self.name_text.delete("1.0", tk.END)
+        """Non-blocking version: spawns background thread for API calls."""
+        self.log_app_event("INFO", "update_stock_names() called - spawning background thread")
+        threading.Thread(target=self._update_stock_names_background, daemon=True).start()
+    
+    def _animate_fetch_status(self, stop_event, progress_counter, total_count):
+        """Animate the fetch status indicator with cycling dots and progress counter."""
+        dots = [".", "..", "..."]
+        idx = 0
+        while not stop_event.is_set():
+            current = progress_counter[0]
+            self.root.after(0, lambda d=dots[idx], c=current, t=total_count: 
+                self.stock_fetch_status.config(text=f"Fetching data{d} ({c}/{t})"))
+            idx = (idx + 1) % len(dots)
+            time.sleep(0.5)  # Update every 0.5 seconds
         
-        # Remove all existing tags
-        for tag in self.name_text.tag_names():
-            self.name_text.tag_delete(tag)
+        # Clear status when done
+        self.root.after(0, lambda: self.stock_fetch_status.config(text=""))
+    
+    def _update_stock_names_background(self):
+        """Background thread: Fetch stock names and colors sequentially."""
+        # CRITICAL FIX: Redirect stdout/stderr to prevent encoding errors in background thread
+        # The xai_model.py uses cprint() which causes 'charmap' codec errors on Windows
+        import sys
+        import io
+        old_stdout = sys.stdout
+        old_stderr = sys.stderr
+        sys.stdout = io.StringIO()  # Suppress all print statements
+        sys.stderr = io.StringIO()  # Suppress all error messages
         
-        tickers = [line.strip() for line in self.stock_text.get("1.0", tk.END).splitlines() if line.strip()]
-        stock_colors = self.config.get("stock_colors", {})
-        stock_names = self.config.get("stock_names", {})  # Cache for company names
-        
-        config_updated = False
-        new_tickers = [t for t in tickers if t not in stock_colors or t not in stock_names]
-        
-        # Only log if there are new tickers to process
-        if new_tickers:
-            print(f"📊 Fetching data for {len(new_tickers)} new ticker(s): {', '.join(new_tickers)}")
-            self.log_app_event("INFO", f"Fetching data for {len(new_tickers)} new ticker(s): {', '.join(new_tickers)}")
-        
-        for i, ticker in enumerate(tickers):
-            # Get cached name or fetch from Finnhub
-            if ticker in stock_names:
-                name = stock_names[ticker]
-            else:
-                try:
-                    profile = self.finnhub_client.company_profile2(symbol=ticker)
-                    name = profile.get("name", "N/A")
-                    stock_names[ticker] = name  # Cache the name
-                    config_updated = True
-                    print(f"   📝 Name cached for {ticker}: {name}")
-                except:
-                    name = "N/A"
-                    stock_names[ticker] = name  # Cache "N/A" to avoid repeated failed lookups
-                    config_updated = True
+        try:
+            # Get tickers from UI (main thread)
+            tickers = []
+            def get_tickers():
+                nonlocal tickers
+                tickers = [line.strip() for line in self.stock_text.get("1.0", tk.END).splitlines() if line.strip()]
+            self.root.after(0, get_tickers)
+            time.sleep(0.1)  # Wait for UI thread to populate tickers
             
-            # Get or request color for this ticker
-            if ticker not in stock_colors:
-                color = self.get_stock_color_from_grok(ticker, name)
-                stock_colors[ticker] = color
-                config_updated = True
-                print(f"   🎨 Color {color} saved for {ticker}")
-            else:
-                color = stock_colors[ticker]
+            stock_colors = self.config.get("stock_colors", {})
+            stock_names = self.config.get("stock_names", {})
             
-            # Create a tag for this color
-            tag_name = f"color_{ticker}"
-            self.name_text.tag_configure(tag_name, foreground=color)
+            config_updated = False
+            new_tickers = [t for t in tickers if t not in stock_colors or t not in stock_names]
             
-            # Insert the name with the colored tag
-            if i > 0:
-                self.name_text.insert(tk.END, "\n")
-            self.name_text.insert(tk.END, name, tag_name)
-        
-        # Save to config if any names or colors were updated
-        if config_updated:
-            self.config["stock_colors"] = stock_colors
-            self.config["stock_names"] = stock_names
-            self.save_config(show_popup=False)  # Silent save for automatic updates
-        
-        self.name_text.config(state="disabled")
+            # Start animated status indicator if there are new tickers
+            stop_animation = threading.Event()
+            progress_counter = [0]
+            
+            if new_tickers:
+                # Start status animation with progress counter
+                animation_thread = threading.Thread(target=self._animate_fetch_status, args=(stop_animation, progress_counter, len(tickers)), daemon=True)
+                animation_thread.start()
+            
+            # Clear the UI first on main thread
+            def clear_ui():
+                self.name_text.config(state="normal")
+                self.name_text.delete("1.0", tk.END)
+                # Remove all existing tags
+                for tag in self.name_text.tag_names():
+                    self.name_text.tag_delete(tag)
+            self.root.after(0, clear_ui)
+            time.sleep(0.05)  # Brief wait for UI to clear
+            
+            # Rate limiting setup
+            from threading import Lock
+            from concurrent.futures import ThreadPoolExecutor, as_completed
+            finnhub_lock = Lock()
+            grok_lock = Lock()
+            last_finnhub_call = [0]
+            last_grok_call = [0]
+            
+            def rate_limited_finnhub_call():
+                """Rate limit: Max 1 request per 1.5 seconds."""
+                with finnhub_lock:
+                    elapsed = time.time() - last_finnhub_call[0]
+                    if elapsed < 1.5:
+                        time.sleep(1.5 - elapsed)
+                    last_finnhub_call[0] = time.time()
+            
+            def rate_limited_grok_call():
+                """Rate limit: Max 5 requests per second (0.2s delay)."""
+                with grok_lock:
+                    elapsed = time.time() - last_grok_call[0]
+                    if elapsed < 0.2:
+                        time.sleep(0.2 - elapsed)
+                    last_grok_call[0] = time.time()
+            
+            def fetch_ticker_data(ticker):
+                """Fetch name and color for a single ticker with rate limiting."""
+                # Get name from Finnhub
+                if ticker not in stock_names:
+                    try:
+                        rate_limited_finnhub_call()
+                        profile = self.finnhub_client.company_profile2(symbol=ticker)
+                        name = profile.get("name", "N/A")
+                        stock_names[ticker] = name
+                    except:
+                        stock_names[ticker] = "N/A"
+                else:
+                    name = stock_names[ticker]
+                
+                # Get or request color for this ticker
+                if ticker not in stock_colors:
+                    rate_limited_grok_call()
+                    color = self.get_stock_color_from_grok(ticker, name)
+                    stock_colors[ticker] = color
+                else:
+                    color = stock_colors[ticker]
+                
+                return (ticker, name, color)
+            
+            # Process tickers in parallel with max 5 concurrent workers
+            ticker_data = {}
+            with ThreadPoolExecutor(max_workers=5) as executor:
+                future_to_ticker = {executor.submit(fetch_ticker_data, ticker): ticker for ticker in tickers}
+                
+                completed_count = 0
+                for future in as_completed(future_to_ticker):
+                    ticker = future_to_ticker[future]
+                    try:
+                        data = future.result()
+                        ticker_data[ticker] = data
+                        config_updated = True
+                        completed_count += 1
+                        progress_counter[0] = completed_count
+                    except Exception as e:
+                        ticker_data[ticker] = (ticker, "N/A", "#FFFFFF")
+                        completed_count += 1
+                        progress_counter[0] = completed_count
+            
+            # Now update UI in the original ticker order (not completion order)
+            def update_all_ui():
+                self.name_text.config(state="normal")
+                self.name_text.delete("1.0", tk.END)
+                
+                for i, ticker in enumerate(tickers):
+                    if ticker in ticker_data:
+                        t, n, c = ticker_data[ticker]
+                        
+                        # Create a tag for this color
+                        tag_name = f"color_{t}"
+                        self.name_text.tag_configure(tag_name, foreground=c)
+                        
+                        # Insert the name with the colored tag
+                        if i > 0:
+                            self.name_text.insert(tk.END, "\n")
+                        self.name_text.insert(tk.END, n, tag_name)
+                
+                self.name_text.config(state="disabled")
+            
+            self.root.after(0, update_all_ui)
+            
+            # Stop animation
+            if new_tickers:
+                stop_animation.set()
+            
+            # Save to config if any names or colors were updated
+            if config_updated:
+                self.config["stock_colors"] = stock_colors
+                self.config["stock_names"] = stock_names
+                self.root.after(0, lambda: self.save_config(show_popup=False))
+            
+        except Exception as e:
+            # Stop animation on error
+            if 'stop_animation' in locals():
+                stop_animation.set()
+        finally:
+            # CRITICAL: Restore stdout/stderr
+            sys.stdout = old_stdout
+            sys.stderr = old_stderr
 
     def save_current_config(self):
         self.config["master_on"] = self.master_on_var.get()
@@ -1318,9 +1484,35 @@ Respond with ONLY the hex color code (e.g., #FF6B35). No explanations, just the 
         self.config["option_exp_weeks"] = self.option_exp_var.get()
         self.config["option_leverage"] = self.option_leverage_var.get() / 100  # Convert % to decimal
         self.config["test_mode"] = self.test_mode_var.get()
-        self.config["stock_universe"] = [
-            line.strip() for line in self.stock_text.get("1.0", tk.END).splitlines() if line.strip()
-        ]
+        # Get tickers from UI
+        tickers = [line.strip() for line in self.stock_text.get("1.0", tk.END).splitlines() if line.strip()]
+        
+        # Check for duplicates
+        seen = set()
+        duplicates = set()
+        deduplicated_tickers = []
+        
+        for ticker in tickers:
+            ticker_upper = ticker.upper()
+            if ticker_upper in seen:
+                duplicates.add(ticker_upper)
+            else:
+                seen.add(ticker_upper)
+                deduplicated_tickers.append(ticker_upper)
+        
+        # If duplicates found, notify user and update UI
+        if duplicates:
+            duplicate_list = ", ".join(sorted(duplicates))
+            message = f"Duplicate ticker(s) detected and removed:\n\n{duplicate_list}\n\nThe stock universe has been cleaned up."
+            messagebox.showwarning("Duplicates Removed", message)
+            self.log_app_event("WARNING", f"Removed duplicate tickers: {duplicate_list}")
+            
+            # Update UI with deduplicated list
+            self.stock_text.delete("1.0", tk.END)
+            self.stock_text.insert("1.0", "\n".join(deduplicated_tickers))
+        
+        self.config["stock_universe"] = deduplicated_tickers
+        
         # Preserve cached stock data if it exists
         if "stock_colors" not in self.config:
             self.config["stock_colors"] = {}
@@ -1398,17 +1590,17 @@ Respond with ONLY the hex color code (e.g., #FF6B35). No explanations, just the 
 
         if tab_name == "config_tab":
             # Stock list dimensions
-            height_var = tk.IntVar(value=self.preferences["config_tab"].get("stock_text_height", 20))
-            height_entry = tk.Entry(settings_win, textvariable=height_var, bg="gray20", fg="white", 
-                                   insertbackground="white", width=10)
-            row = add_setting("Ticker List Height:", height_entry,
-                            "Number of visible rows in the stock ticker list box", row)
-            
-            width_var = tk.IntVar(value=self.preferences["config_tab"].get("stock_text_width", 10))
-            width_entry = tk.Entry(settings_win, textvariable=width_var, bg="gray20", fg="white", 
+            ticker_width_var = tk.IntVar(value=self.preferences["config_tab"].get("stock_text_width", 15))
+            ticker_width_entry = tk.Entry(settings_win, textvariable=ticker_width_var, bg="gray20", fg="white", 
                                   insertbackground="white", width=10)
-            row = add_setting("Ticker List Width:", width_entry,
-                            "Character width of the stock ticker list box", row)
+            row = add_setting("Ticker Column Width:", ticker_width_entry,
+                            "Character width of the ticker column (recommended: 10-20)", row)
+            
+            names_width_var = tk.IntVar(value=self.preferences["config_tab"].get("stock_names_width", 30))
+            names_width_entry = tk.Entry(settings_win, textvariable=names_width_var, bg="gray20", fg="white", 
+                                  insertbackground="white", width=10)
+            row = add_setting("Stock Names Column Width:", names_width_entry,
+                            "Character width of the stock names column (recommended: 25-50)", row)
             
             # Font sizes
             ticker_font_var = tk.IntVar(value=self.preferences["config_tab"].get("ticker_font_size", 10))
@@ -1445,8 +1637,8 @@ Respond with ONLY the hex color code (e.g., #FF6B35). No explanations, just the 
                             "How long the 'Config saved' message stays visible (1000-10000 ms, 1 second = 1000 ms)", row)
 
             def save():
-                self.preferences["config_tab"]["stock_text_height"] = height_var.get()
-                self.preferences["config_tab"]["stock_text_width"] = width_var.get()
+                self.preferences["config_tab"]["stock_text_width"] = ticker_width_var.get()
+                self.preferences["config_tab"]["stock_names_width"] = names_width_var.get()
                 self.preferences["config_tab"]["ticker_font_size"] = ticker_font_var.get()
                 self.preferences["config_tab"]["name_font_size"] = name_font_var.get()
                 self.preferences["config_tab"]["auto_refresh_colors"] = auto_refresh_var.get()
@@ -1455,11 +1647,12 @@ Respond with ONLY the hex color code (e.g., #FF6B35). No explanations, just the 
                 self.save_preferences()
                 
                 # Apply changes
-                self.stock_text.config(height=height_var.get(), width=width_var.get(), 
+                self.stock_text.config(width=ticker_width_var.get(), 
                                       font=("Courier", ticker_font_var.get()))
-                self.name_text.config(height=height_var.get(), 
+                self.name_text.config(width=names_width_var.get(),
                                      font=("Courier", name_font_var.get()))
                 settings_win.destroy()
+                self.log_app_event("SUCCESS", "Config preferences saved and applied")
 
         elif tab_name == "dashboard_tab":
             # Log font size
@@ -2750,13 +2943,15 @@ Respond with ONLY the hex color code (e.g., #FF6B35). No explanations, just the 
         self.app_logs_text.bind("<Configure>", lambda e: self.update_scrollbar_visibility(self.app_logs_text, self.app_logs_scrollbar))
         self.update_scrollbar_visibility(self.app_logs_text, self.app_logs_scrollbar)
         
-        # Configure color tags for different log levels
-        self.app_logs_text.tag_config("INFO", foreground="cyan")
-        self.app_logs_text.tag_config("SUCCESS", foreground="green")
-        self.app_logs_text.tag_config("WARNING", foreground="yellow")
-        self.app_logs_text.tag_config("ERROR", foreground="red")
-        self.app_logs_text.tag_config("DEBUG", foreground="gray")
-        self.app_logs_text.tag_config("timestamp", foreground="magenta")
+        # Configure color tags for different log levels with enhanced styling
+        self.app_logs_text.tag_config("INFO", foreground="#00D4FF", font=("Courier", 9, "bold"))
+        self.app_logs_text.tag_config("SUCCESS", foreground="#00FF88", font=("Courier", 9, "bold"))
+        self.app_logs_text.tag_config("WARNING", foreground="#FFD700", font=("Courier", 9, "bold"))
+        self.app_logs_text.tag_config("ERROR", foreground="#FF4444", font=("Courier", 9, "bold"))
+        self.app_logs_text.tag_config("DEBUG", foreground="#888888", font=("Courier", 8))
+        self.app_logs_text.tag_config("timestamp", foreground="#FF66FF", font=("Courier", 9))
+        self.app_logs_text.tag_config("message", foreground="#DDDDDD", font=("Courier", 9))
+        self.app_logs_text.tag_config("separator", foreground="#444444")
         
         # Log initial app startup
         self.log_app_event("INFO", "App Logs initialized")
@@ -2784,10 +2979,40 @@ Respond with ONLY the hex color code (e.g., #FF6B35). No explanations, just the 
             except Exception as e:
                 print(f"Failed to write to app log file: {e}")
             
-            # Insert to UI
-            self.app_logs_text.insert(tk.END, f"[{timestamp_short}] ", "timestamp")
-            self.app_logs_text.insert(tk.END, f"[{level}] ", level)
-            self.app_logs_text.insert(tk.END, f"{message}\n")
+            # Enhanced UI formatting with emojis and better structure
+            # Map log levels to emojis
+            emoji_map = {
+                "INFO": "ℹ️",
+                "SUCCESS": "✅",
+                "WARNING": "⚠️",
+                "ERROR": "❌",
+                "DEBUG": "🔍"
+            }
+            emoji = emoji_map.get(level, "•")
+            
+            # For DEBUG messages, use compact format
+            if level == "DEBUG":
+                self.app_logs_text.insert(tk.END, f"  {emoji} ", "DEBUG")
+                self.app_logs_text.insert(tk.END, f"[{timestamp_short}] ", "timestamp")
+                self.app_logs_text.insert(tk.END, f"{message}\n", "DEBUG")
+            else:
+                # For other messages, use enhanced format with separators
+                # Add subtle separator for non-DEBUG messages
+                if level in ["ERROR", "WARNING"]:
+                    self.app_logs_text.insert(tk.END, "─" * 80 + "\n", "separator")
+                
+                # Emoji + Level + Timestamp on first line
+                self.app_logs_text.insert(tk.END, f"{emoji} ", level)
+                self.app_logs_text.insert(tk.END, f"{level}", level)
+                self.app_logs_text.insert(tk.END, f"  •  ", "separator")
+                self.app_logs_text.insert(tk.END, f"{timestamp_short}\n", "timestamp")
+                
+                # Message content indented
+                self.app_logs_text.insert(tk.END, f"   {message}\n", "message")
+                
+                # Add spacing after important messages
+                if level in ["ERROR", "SUCCESS"]:
+                    self.app_logs_text.insert(tk.END, "\n")
             
             # Auto-scroll to bottom
             self.app_logs_text.see(tk.END)
