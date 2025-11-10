@@ -66,6 +66,11 @@ Thumbs.db
 *.log
 *.sqlite
 *.db
+logs/  # All log files organized in logs directory
+
+# User-specific config and UI state
+config.json
+window_position.json
 
 # Moon Dev Trading Specific
 dont_overtrade.txt

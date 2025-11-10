@@ -1,0 +1,64 @@
+{
+    "config_tab": {
+        "stock_text_height": 30,
+        "stock_text_width": 10,
+        "ticker_font_size": 10,
+        "name_font_size": 9,
+        "auto_refresh_colors": true,
+        "confirm_save": true,
+        "save_notification_duration_ms": 3000
+    },
+    "dashboard_tab": {
+        "table_col_widths": {
+            "Ticker": 100,
+            "Earnings Date": 120,
+            "Trade Time": 120,
+            "Sentiment": 100
+        },
+        "log_font_size": 10,
+        "table_font_size": 10,
+        "auto_scroll": true,
+        "show_past_earnings": true,
+        "max_log_lines": 1000,
+        "refresh_rate_ms": 1000
+    },
+    "visuals_tab": {
+        "chart_size": [
+            5,
+            3
+        ],
+        "table_col_widths": {
+            "Timestamp": 150,
+            "Ticker": 100,
+            "Size": 80,
+            "Entry": 80,
+            "Current": 80,
+            "PnL": 80,
+            "Status": 80
+        },
+        "refresh_interval": 10,
+        "sentiment_time_frame_days": 30,
+        "chart_line_width": 2,
+        "show_sentiment_chart": true,
+        "show_exposure_chart": true,
+        "max_trade_rows": 50,
+        "show_closed_only": false
+    },
+    "logs_tab": {
+        "font_size": 9,
+        "grok_font_size": 9,
+        "auto_scroll": true,
+        "max_lines": 2000,
+        "show_timestamps": true,
+        "wrap_lines": false
+    },
+    "grok_logs_tab": {
+        "font_size": 10,
+        "response_text_width": 140,
+        "timestamp_color": "magenta",
+        "show_separators": true,
+        "auto_scroll": true,
+        "max_entries": 100,
+        "show_reasoning": true
+    }
+}
