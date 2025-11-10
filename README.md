@@ -1,330 +1,305 @@
-# 🤖 AI AGENTS FOR TRADING
+# 📊 CDEM Trading Agent - Consensus-Driven Earnings Management
 
-<p align="center">
-  <a href="https://www.moondev.com/"><img src="moondev.png" width="300" alt="Moon Dev"></a>
-</p>
+A sophisticated GUI-driven stock trading system that combines AI-powered sentiment analysis with earnings calendar management. Built on Moon Dev's AI agent framework.
 
-## 🎯 Vision
-ai agents are clearly the future and the entire workforce will be replaced or atleast using ai agents. while i am a quant and building agents for algo trading i will be contributing to all different types of ai agent flows and placing all of the agents here for free, 100% open sourced because i beleive code is the great equalizer and we have never seen a regime shift like this so i need to get this code to the people
+## 🎯 What is CDEM?
 
-feel free to join [our discord](https://discord.gg/8UPuVZ53bh) if you beleive ai agents will be integrated into the workforce
+The **Consensus-Driven Earnings Management (CDEM)** agent is an automated stock trading system that:
 
-## Video Updates & Training
+- 📅 **Monitors earnings calendars** - Tracks upcoming earnings dates for your stock universe
+- 🤖 **AI sentiment analysis** - Uses Grok AI to analyze earnings sentiment and generate trading signals
+- 💼 **Automated execution** - Places trades via Tradier API based on configurable risk parameters
+- 📈 **Risk management** - Enforces position limits, stop losses, trailing stops, and portfolio exposure caps
+- 🎨 **Beautiful GUI** - Full-featured desktop app built with Tkinter for complete control
 
-⭐️ [first full concise documentation video (watch here)](https://youtu.be/RlqzkSgDKDc)
+## 🖥️ Desktop Application Features
 
-⭐️ [second full walkthrough video(watch here)](https://youtu.be/tjY24JR8Cso?si=Za-PQ2L79US6cu2T)
+Launch the GUI with `python app.py`:
 
-⭐️ [third full walkthrough w/ big updates, new models, new agents(watch here)](https://youtu.be/qZv6IFIkk6I)
+### Dashboard Tab
+- Real-time earnings calendar with sentiment scores
+- Color-coded past/upcoming earnings dates
+- Agent status monitoring and control
+- Trading mode indicator (Paper/Live)
+- Account balance and buying power display
+- Trade execution alerts
 
-📀 follow all updates here on youtube in this playlist: https://www.youtube.com/playlist?list=PLXrNVMjRZUJg4M4uz52iGd1LhXXGVbIFz
+### Config Tab
+- Stock universe management with auto-alphabetization
+- Synchronized scrolling ticker/company name display
+- Brand color-coded stock names (powered by Grok)
+- Duplicate ticker detection and removal
+- Trading parameters configuration:
+  - Risk per trade percentage
+  - Maximum portfolio exposure
+  - Stop loss and trailing stop settings
+  - Options trading toggle
+  - Paper/live trading mode
 
----
+### Visuals Tab
+- Real-time sentiment score charts
+- Portfolio exposure visualization
+- Complete trade history table with PnL tracking
+- Interactive matplotlib charts
 
-## 🤖 All Available Agents
+### Logs
+- **Terminal Logs** - Agent decision-making and trade execution
+- **Grok Logs** - Formatted AI model interactions with reasoning
+- **App Logs** - System events and API interactions
+- Real-time updates with color-coded severity levels
 
-**⚠️ For live trading agents: Only use these AFTER thoroughly backtesting your strategies!**
+### Settings
+- Customizable UI preferences per tab
+- Font sizes, column widths, refresh rates
+- Auto-scroll and display options
+- Persistent window position
 
-### Backtesting & Research Agents
-- **RBI Agent** (`rbi_agent.py`): Uses DeepSeek to research trading strategies based on YouTube videos, PDFs, or text you provide, then codes out the backtest automatically
-- **RBI Parallel Agent** (`rbi_agent_pp_multi.py`): Parallel version with 18 threads, tests across 20+ data sources, web dashboard included
-- **Research Agent** (`research_agent.py`): Fills the ideas.txt file so the RBI agent can run forever
+## 🚀 Quick Start
 
-### Live Trading Agents
-- **Trading Agent** (`trading_agent.py`): **DUAL-MODE AI trading system** - Toggle between single model (fast ~10s) or swarm mode (6-model consensus ~45-60s). Swarm mode queries Claude 4.5, GPT-5, Gemini 2.5, Grok-4, DeepSeek, and DeepSeek-R1 local for majority vote trading decisions. Configure via `USE_SWARM_MODE` in config.py
-- **Strategy Agent** (`strategy_agent.py`): Manages and executes trading strategies placed in the strategies folder
-- **Risk Agent** (`risk_agent.py`): Monitors and manages portfolio risk, enforcing position limits and PnL thresholds
-- **Copy Agent** (`copy_agent.py`): Monitors copy bot for potential trades
-- **Swarm Agent** (`swarm_agent.py`): Queries 6 AI models in parallel (Claude 4.5, GPT-5, Gemini 2.5, Grok-4, DeepSeek, DeepSeek-R1 local), generates AI consensus summary, returns clean JSON with model mapping for easy parsing 🐝
+### Prerequisites
+- Python 3.10.9+
+- Conda (recommended) or pip
+- Windows (tested), macOS/Linux (should work)
 
-### Market Analysis Agents
-- **Whale Agent** (`whale_agent.py`): Monitors whale activity and announces when a whale enters the market
-- **Sentiment Agent** (`sentiment_agent.py`): Analyzes Twitter sentiment for crypto tokens with voice announcements
-- **Chart Agent** (`chartanalysis_agent.py`): Looks at any crypto chart and analyzes it with AI to make a buy/sell/nothing recommendation
-- **Funding Agent** (`funding_agent.py`): Monitors funding rates across exchanges and uses AI to analyze opportunities, providing voice alerts for extreme funding situations with technical context 🌙
-- **Liquidation Agent** (`liquidation_agent.py`): Tracks liquidation events with configurable time windows (15min/1hr/4hr), providing AI analysis and voice alerts for significant liquidation spikes 💦
-- **Listing Arbitrage Agent** (`listingarb_agent.py`): Identifies promising Solana tokens on CoinGecko before they reach major exchanges like Binance and Coinbase, using parallel AI analysis for technical and fundamental insights
-- **Funding Arbitrage Agent** (`fundingarb_agent.py`): Tracks the funding rate on HyperLiquid to find funding rate arbitrage opportunities between HL and Solana
-- **New or Top Tokens Agent** (`new_or_top_agent.py`): Looks at the new tokens and the top tokens from CoinGecko API
+### Installation
 
-### Solana-Specific Agents
-- **Sniper Agent** (`sniper_agent.py`): Watches for new Solana token launches, analyzes them, and maybe snipes
-- **TX Agent** (`tx_agent.py`): Watches transactions made by your copy list and prints them out with optional auto tab open
-- **Solana Agent** (`solana_agent.py`): Looks at the sniper agent and the TX agent to select which memes may be interesting
-
-### Content Creation Agents
-- **Chat Agent** (`chat_agent.py`): Monitors YouTube live stream chat, moderates & responds to known questions. Absolute fire.
-- **Twitter Agent** (`tweet_agent.py`): Takes in text and creates tweets using DeepSeek or other models
-- **Video Agent** (`video_agent.py`): Takes in text to create videos by creating audio snippets using ElevenLabs and combining with raw_video footage
-- **Clips Agent** (`clips_agent.py`): Helps clip long videos into shorter ones so you can upload to your YouTube and get paid. More info: https://discord.gg/XAw8US9aHT
-- **Real-Time Clips Agent** (`realtime_clips_agent.py`): Makes real-time clips of streamers using OBS
-- **Phone Agent** (`phone_agent.py`): An AI agent that can take phone calls for you
-
-### Specialized Agents
-- **Focus Agent** (`focus_agent.py`): Randomly samples audio during coding sessions to maintain productivity, providing focus scores and voice alerts when focus drops (~$10/month, perfect for voice-to-code workflows)
-- **Million Agent** (`million_agent.py`): Uses million context window from Gemini to pull in a knowledge base
-- **TikTok Agent** (`tiktok_agent.py`): Scrolls TikTok and gets screenshots of the video + comments to extract consumer data to feed into algos. Sometimes called social arbitrage
-- **Compliance Agent** (`compliance_agent.py`): Analyzes TikTok ads for Facebook advertising compliance, extracting frames and transcribing audio to check against FB guidelines
-- **Housecoin Agent** (`housecoin_agent.py`): DCA (dollar cost average) agent with AI confirmation layer using Grok-4 for the thesis: 1 House = 1 Housecoin 🏠
-- **Polymarket Agent** (`polymarket_agent.py`): Connects to the live trades feed via WebSocket and analyzes with the swarm agent to see which markets could be interesting to trade
-
-
-## ⚠️ Critical Disclaimers
-
-*There is no token associated with this project and there never will be. any token launched is not affiliated with this project, moon dev will never dm you. be careful. don't send funds anywhere*
-
-**PLEASE READ CAREFULLY:**
-
-1. This is an experimental research project, NOT a trading system
-2. There are NO plug-and-play solutions for guaranteed profits
-3. We do NOT provide trading strategies
-4. Success depends entirely on YOUR:
-   - Trading strategy
-   - Risk management
-   - Market research
-   - Testing and validation
-   - Overall trading approach
-
-5. NO AI agent can guarantee profitable trading
-6. You MUST develop and validate your own trading approach
-7. Trading involves substantial risk of loss
-8. Past performance does not indicate future results
-
-**⚠️ IMPORTANT: This is an experimental project. There are NO guarantees of profitability. Trading involves substantial risk of loss.**
-
-## 👂 Looking for Updates?
-Project updates will be posted in Discord, join here: [discord.gg/8UPuVZ53bh](https://discord.gg/8UPuVZ53bh)
-
-## 🔗 Links
-- Free Algo Trading Roadmap: [moondev.com](https://moondev.com)
-- Algo Trading Education: [algotradecamp.com](https://algotradecamp.com)
-- Business Contact [moon@algotradecamp.com](mailto:moon@algotradecamp.com)
-
----
-
-## 🚀 Quick Start Guide - RBI Backtesting Agent
-
-**Why Start with Backtesting?**
-
-Before running ANY trading algorithm or AI agent with real money, you MUST backtest your strategies. Backtesting shows you how a strategy would have performed on historical data. The RBI (Research-Based Inference) Agent automates this entire process for you.
-
-**What is the RBI Agent?**
-
-The RBI Agent takes your trading ideas (from YouTube videos, PDFs, or plain text) and:
-1. 🧠 Uses AI to understand the trading strategy
-2. 💻 Codes a complete backtest using the `backtesting.py` library
-3. 📊 Tests across 20+ different market data sources
-4. ✅ Only saves strategies that pass a 1% return threshold
-5. 🎯 Tries to optimize strategies to hit a 50% target return
-
-**Python Version:** 3.10.9 was used during development
-
-### Step 1: ⭐ Star & Fork the Repo
-- Click the star button to save it to your GitHub favorites
-- Fork to your GitHub account to get your own copy
-- This lets you make changes and track updates
-
-### Step 2: 💻 Clone to Your Machine
+1. **Clone the repository**
 ```bash
-git clone https://github.com/YOUR_USERNAME/moon-dev-ai-agents-for-trading.git
-cd moon-dev-ai-agents-for-trading
+git clone https://github.com/BackslashRobotics/moon-dev-ai-agents.git
+cd moon-dev-ai-agents
 ```
 
-**Recommended IDEs:**
-- [Cursor](https://www.cursor.com/) - AI-enabled coding
-- [Windsurfer](https://codeium.com/) - AI-enabled coding
-
-### Step 3: 🔑 Set Up Environment Variables
-
-The RBI Agent needs API keys to function. Create a `.env` file in the root directory:
-
+2. **Create conda environment**
 ```bash
-# Copy the example file
-cp .env.example .env
-```
-
-**Required API Keys for RBI Agent:**
-
-```bash
-# AI Model APIs (you need at least ONE of these)
-ANTHROPIC_KEY=your_anthropic_api_key_here          # Claude models (recommended)
-OPENAI_KEY=your_openai_api_key_here                # GPT models
-DEEPSEEK_KEY=your_deepseek_api_key_here            # DeepSeek models (cheap!)
-GROQ_API_KEY=your_groq_api_key_here                # Groq (fast inference)
-GEMINI_KEY=your_gemini_api_key_here                # Google Gemini
-XAI_API_KEY=your_xai_api_key_here                  # Grok models
-
-# Market Data APIs (for downloading price data)
-BIRDEYE_API_KEY=your_birdeye_api_key_here          # Solana token data
-COINGECKO_API_KEY=your_coingecko_api_key_here      # Crypto market data
-```
-
-**Where to Get API Keys:**
-- **Anthropic Claude**: https://console.anthropic.com/
-- **OpenAI GPT**: https://platform.openai.com/api-keys
-- **DeepSeek**: https://platform.deepseek.com/ (very cheap, great for backtesting)
-- **Groq**: https://console.groq.com/
-- **Google Gemini**: https://aistudio.google.com/app/apikey
-- **xAI Grok**: https://console.x.ai/
-- **BirdEye**: https://birdeye.so/ (Solana data)
-- **CoinGecko**: https://www.coingecko.com/en/api
-
-⚠️ **Never commit or share your `.env` file! It's in .gitignore for your safety.**
-
-### Step 4: 📦 Install Dependencies
-
-Using conda (recommended):
-```bash
-conda create -n tflow python=3.10.9
-conda activate tflow
+conda create -n cdem-agent-env python=3.10.9
+conda activate cdem-agent-env
 pip install -r requirements.txt
 ```
 
-Or using pip directly:
+3. **Set up environment variables**
+
+Copy `.env_example` to `.env` and add your API keys:
+
 ```bash
-pip install -r requirements.txt
+# Required for CDEM Agent
+XAI_API_KEY=your_xai_grok_api_key_here
+FINNHUB_API_KEY=your_finnhub_api_key_here
+
+# Tradier API (for live/paper trading)
+TRADIER_LIVE_API_KEY=your_tradier_live_key_here
+TRADIER_LIVE_ACCOUNT_ID=your_live_account_id_here
+TRADIER_SANDBOX_API_KEY=your_tradier_sandbox_key_here
+TRADIER_SANDBOX_ACCOUNT_ID=your_sandbox_account_id_here
+
+# Optional AI providers (for other agents)
+ANTHROPIC_KEY=your_anthropic_key_here
+OPENAI_KEY=your_openai_key_here
+DEEPSEEK_KEY=your_deepseek_key_here
 ```
 
-### Step 5: 🧪 Run Your First Backtest
+**Get API Keys:**
+- **xAI Grok**: https://console.x.ai/ (for sentiment analysis)
+- **Finnhub**: https://finnhub.io/ (for market data)
+- **Tradier**: https://tradier.com/ (for trade execution)
 
-**Option A: Single Strategy Test**
-
-Create a file called `ideas.txt` in `src/data/rbi_pp_multi/`:
-
-```
-Buy when RSI < 30 and sell when RSI > 70
-```
-
-Then run:
+4. **Launch the application**
 ```bash
-python src/agents/rbi_agent_pp_multi.py
-```
-
-**Option B: Use the Web Dashboard**
-
-Start the dashboard:
-```bash
-cd src/data/rbi_pp_multi
 python app.py
 ```
 
-Open browser to: `http://localhost:8000`
+The GUI will open automatically. Configure your stock universe in the Config tab and start the agent from the Dashboard.
 
-Click "New Backtests" and enter your strategy ideas!
+## ⚙️ Configuration
 
-### Step 6: 📊 Understanding Results
+Edit `config.json` or use the GUI Config tab:
 
-The agent will:
-- Process your strategy idea
-- Generate backtest code
-- Test across 20+ market datasets (BTC, ETH, SOL, etc.)
-- Show results in a table with:
-  - Return %
-  - Buy & Hold %
-  - Max Drawdown
-  - Sharpe Ratio
-  - Sortino Ratio
-  - Number of Trades
-
-**Only strategies returning > 1% are saved to the CSV.**
-
-Results are saved to:
-- `src/data/rbi_pp_multi/backtest_stats.csv` - All passing backtests
-- `src/data/rbi_pp_multi/user_folders/` - Organized by run name
-
-### Step 7: 🔍 Analyze Backtest Code
-
-Find your strategy files in:
-```
-src/data/rbi_pp_multi/10_25_2025_09_08/
+```json
+{
+  "stock_universe": ["AAPL", "MSFT", "GOOGL", "TSLA"],
+  "risk_per_trade": 0.02,
+  "max_exposure": 0.5,
+  "stop_loss_pct": 0.05,
+  "trailing_trigger": 0.03,
+  "trailing_pct": 0.02,
+  "paper_trading": true,
+  "check_interval_minutes": 15
+}
 ```
 
-Each successful backtest has:
-- **Python file**: The actual backtest code you can review and modify
-- **Results**: Performance metrics
+### Key Parameters
 
-**Read the code!** This is how you learn what works and what doesn't.
+- **risk_per_trade**: Percentage of portfolio to risk per trade (default: 2%)
+- **max_exposure**: Maximum total portfolio exposure (default: 50%)
+- **stop_loss_pct**: Stop loss percentage (default: 5%)
+- **trailing_trigger**: Profit threshold to activate trailing stop (default: 3%)
+- **trailing_pct**: Trailing stop distance (default: 2%)
+- **paper_trading**: Toggle between paper/live trading
+- **check_interval_minutes**: How often to check for earnings/sentiment updates
+
+## 🤖 How It Works
+
+### Sentiment Analysis Flow
+
+1. **Earnings Detection**: Monitors Finnhub for upcoming earnings dates
+2. **AI Analysis**: Sends earnings data to Grok AI for sentiment scoring (0-100)
+3. **Signal Generation**: Determines BUY/SELL/HOLD based on sentiment thresholds:
+   - Score ≥ 70: Strong Buy
+   - Score 60-69: Buy
+   - Score 40-59: Hold
+   - Score 30-39: Sell
+   - Score < 30: Strong Sell
+4. **Risk Checks**: Validates against position limits and risk parameters
+5. **Order Execution**: Places trades via Tradier API if all checks pass
+6. **Position Management**: Monitors open positions and applies stop losses/trailing stops
+
+### GUI Features
+
+- **Automatic alphabetization** of stock tickers on save
+- **Duplicate ticker detection** with popup notifications
+- **Synchronized scrolling** between ticker and company name columns
+- **Brand-colored stock names** fetched from Grok AI
+- **Multi-threaded API calls** with rate limiting (Finnhub: 1/1.5s, Grok: 5/s)
+- **Real-time log updates** via file system watchers
+- **Window position persistence** across sessions
+- **Split-screen buttons** for window management
+- **Fullscreen mode** with multi-monitor support
+
+## 📊 Trading Strategy
+
+The CDEM agent implements a **sentiment-driven earnings strategy**:
+
+### Entry Signals
+- Earnings report within 7 days (configurable)
+- AI sentiment score indicates positive/negative outlook
+- Portfolio exposure below max_exposure limit
+- No existing position in the ticker (or position size below limit)
+
+### Exit Signals
+- Stop loss triggered (default: -5%)
+- Trailing stop triggered (activates after +3% gain, trails by -2%)
+- Negative sentiment shift detected
+- Manual exit via GUI
+
+### Position Sizing
+- Calculated based on risk_per_trade percentage
+- Accounts for available buying power
+- Respects max_position_percentage per ticker
+
+## 🎨 UI Customization
+
+All UI preferences are stored in `preferences.json` and can be adjusted via Settings buttons in each tab:
+
+- Font sizes for logs, tables, and text areas
+- Column widths for all tables
+- Refresh rates and auto-scroll behavior
+- Chart dimensions and colors
+- Save notification duration
+
+## 📝 Logging
+
+Three types of logs for complete visibility:
+
+### Terminal Logs (`logs/terminal_logs.txt`)
+```
+📅 2025-11-10 12:00:00
+💰 AAPL earnings in 3 days
+🧠 Grok sentiment: 78/100
+✅ BUY signal generated
+📊 Order placed: 10 shares @ $150.00
+```
+
+### Grok Logs (`logs/grok_logs.json`)
+Pretty-formatted JSON with:
+- Complete prompt sent to Grok
+- AI reasoning and analysis
+- Structured response data
+- Timestamp and metadata
+
+### App Logs (`logs/app_logs.txt`)
+System-level events:
+- API call results
+- Configuration changes
+- Stock data fetching
+- UI interactions
+
+## 🛡️ Risk Management
+
+The agent includes multiple layers of protection:
+
+1. **Pre-trade checks**: Validates risk limits before placing orders
+2. **Position limits**: Maximum exposure per ticker and total portfolio
+3. **Stop losses**: Automatic exit on adverse price movements
+4. **Trailing stops**: Lock in profits as price moves favorably
+5. **Paper trading mode**: Test strategies without real capital
+6. **Manual override**: Stop agent instantly via GUI
+
+## 🔄 Updates & Maintenance
+
+The agent automatically:
+- ✅ Saves window position and size
+- ✅ Caches stock names and brand colors
+- ✅ Sorts stock universe alphabetically
+- ✅ Removes duplicate tickers
+- ✅ Logs all activity for debugging
+- ✅ Handles API rate limits
+- ✅ Recovers from errors gracefully
+
+## 🏗️ Project Structure
+
+```
+moon-dev-ai-agents/
+├── app.py                          # Main GUI application
+├── src/agents/cdem_agent.py        # Trading agent logic
+├── config.json                     # Trading configuration
+├── preferences.json                # UI preferences
+├── logs/                           # All log files
+│   ├── terminal_logs.txt
+│   ├── grok_logs.json
+│   └── app_logs.txt
+├── src/data/cdem/                  # Agent data
+│   ├── sentiment_history.csv
+│   └── portfolio.csv
+└── test_files/                     # Development tests (git-ignored)
+```
+
+## 🤝 Credits & Attribution
+
+This project is built on top of **Moon Dev's AI Agents for Trading** framework:
+- Original repository: https://github.com/moon-dev-ai/moon-dev-ai-agents-for-trading
+- Model factory pattern and base agent architecture by Moon Dev
+- Extended and specialized for earnings-based trading with GUI
+
+### Moon Dev Resources
+- YouTube: https://www.youtube.com/@MoonDevTech
+- Discord: https://discord.gg/8UPuVZ53bh
+- Website: https://moondev.com
+
+## ⚠️ Disclaimers
+
+**PLEASE READ CAREFULLY:**
+
+1. **Not Financial Advice**: This software is for educational purposes only
+2. **Substantial Risk**: Trading stocks involves substantial risk of loss
+3. **No Guarantees**: Past performance does not indicate future results
+4. **Your Responsibility**: You are solely responsible for your trading decisions
+5. **Test First**: Always backtest and paper trade before using real capital
+6. **Not a Professional Service**: I am not a licensed financial advisor
+
+**Trading Disclaimer:**
+- All trading involves risk and may result in losses
+- This software is experimental and may contain bugs
+- You should only trade with capital you can afford to lose
+- No AI system can guarantee profitable trading
+- You must develop and validate your own trading approach
+
+**CFTC Disclaimer:** Trading commodities and securities involves substantial risk of loss. There is no guarantee that any trading strategy will result in profits.
+
+## 📜 License
+
+This project inherits the license from Moon Dev's original repository. See LICENSE file for details.
 
 ---
 
-## 🎯 Configuration - RBI Agent
+**Version**: 118 (App UI) | CDEM Agent v3.0.1
 
-All settings are in `src/agents/rbi_agent_pp_multi.py` (lines 130-132):
-
-```python
-# 🎯 PROFIT TARGET CONFIGURATION
-TARGET_RETURN = 50  # Target return in % (AI tries to optimize to this)
-SAVE_IF_OVER_RETURN = 1.0  # Save backtest to CSV if return > this %
-```
-
-**How it works:**
-- AI tries to optimize strategies to hit **50% return**
-- But ANY backtest returning **> 1%** gets saved to CSV
-- This way you can review all decent strategies, not just perfect ones
-
-**Other Settings:**
-```python
-MAX_WORKERS = 18  # Number of parallel threads (adjust based on your CPU)
-DEBUG_BACKTEST_ERRORS = True  # Auto-fix coding errors with AI
-MAX_DEBUG_ITERATIONS = 10  # How many times to try fixing errors
-```
-
----
-
-## 📚 Advanced: Adding Custom Data Sources
-
-Want to test on your own tokens? Edit the data list in `rbi_agent_pp_multi.py` (lines 157-178):
-
-```python
-ALL_DATA_CONFIGS = [
-    # Crypto data from CoinGecko/BirdEye
-    {'symbol': 'BTC-USD', 'timeframe': '15m', 'days_back': 90},
-    {'symbol': 'ETH-USD', 'timeframe': '15m', 'days_back': 90},
-    {'symbol': 'SOL-USD', 'timeframe': '15m', 'days_back': 90},
-
-    # Add your own token (Solana contract address)
-    {'symbol': 'YOUR_TOKEN_ADDRESS', 'timeframe': '1H', 'days_back': 30},
-]
-```
-
-The agent will automatically download and cache the data.
-
-
----
-
-## 🗺️ ROADMAP
-
-### In Progress
-- [x] **HyperLiquid Perps Integration** ✅
-- [x] **Swarm Consensus Trading** ✅
-- [x] **RBI Parallel Backtesting** ✅
-
-### Coming Soon
-- [ ] **Polymarket Integration** - Prediction market trading
-- [ ] **Base Chain Integration** - L2 network support
-- [ ] **Extended Integration** - Additional exchange support
-- [ ] **HyperLiquid Spot Trading** - Spot market support
-- [ ] **Trending Agent** - Spots leaders on HyperLiquid
-- [ ] **Position Sizing Agent** - Volume/liquidation-based sizing
-- [ ] **Regime Agents** - Adaptive strategy switching
-- [ ] **Polymarket Sweeper Agent** - Follow successful prediction traders
-
-### Future Ideas
-- [ ] **Lighter Integration**
-- [ ] **Pacifica Integration**
-- [ ] **Hibachi Integration**
-- [ ] **Aster Integration**
-- [ ] **HyperEVM Support**
-
----
-
-*Built with love by Moon Dev - Pioneering the future of AI-powered trading*
-
-## 📜 Detailed Disclaimer
-The content presented is for educational and informational purposes only and does not constitute financial advice. All trading involves risk and may not be suitable for all investors. You should carefully consider your investment objectives, level of experience, and risk appetite before investing.
-
-Past performance is not indicative of future results. There is no guarantee that any trading strategy or algorithm discussed will result in profits or will not incur losses.
-
-**CFTC Disclaimer:** Commodity Futures Trading Commission (CFTC) regulations require disclosure of the risks associated with trading commodities and derivatives. There is a substantial risk of loss in trading and investing.
-
-I am not a licensed financial advisor or a registered broker-dealer. Content & code is based on personal research perspectives and should not be relied upon as a guarantee of success in trading.
+*Built by a trader, for traders. Standing on the shoulders of giants.* 🚀
