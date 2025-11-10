@@ -71,7 +71,6 @@ logs/  # All log files organized in logs directory
 # User-specific config and UI state
 config.json
 window_position.json
-preferences.json
 
 # Test and Development Files
 test_files/

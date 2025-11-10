@@ -1,4 +1,4 @@
-# Version 117
+# Version 118
 # ============================================================================
 # VERSION UPDATE CHECKLIST - READ THIS BEFORE EDITING!
 # ============================================================================
@@ -1211,8 +1211,8 @@ class CDEMApp:
             insertbackground="white",
             highlightbackground="black",
         )
-        self.tickers_scrollbar = ttk.Scrollbar(tickers_container, command=self.stock_text.yview)
-        self.stock_text.config(yscrollcommand=self.tickers_scrollbar.set)
+        self.tickers_scrollbar = ttk.Scrollbar(tickers_container)
+        # Scrollbar command will be set after name_text is created
         
         self.stock_text.pack(side="left", fill="both", expand=True)
         self.tickers_scrollbar.pack(side="right", fill="y")
@@ -1242,8 +1242,7 @@ class CDEMApp:
             highlightbackground="black",
             state="disabled",
         )
-        self.names_scrollbar = ttk.Scrollbar(names_container, command=self.name_text.yview)
-        self.name_text.config(yscrollcommand=self.names_scrollbar.set)
+        self.names_scrollbar = ttk.Scrollbar(names_container)
         
         self.name_text.pack(side="left", fill="both", expand=True)
         self.names_scrollbar.pack(side="right", fill="y")
@@ -1251,6 +1250,35 @@ class CDEMApp:
         # Auto-hide scrollbar when not needed
         self.name_text.bind("<Configure>", lambda e: self.update_scrollbar_visibility(self.name_text, self.names_scrollbar))
         self.update_scrollbar_visibility(self.name_text, self.names_scrollbar)
+
+        # Synchronized scrolling setup for tickers and names
+        def sync_scroll(*args):
+            """Scroll both ticker and name text widgets together"""
+            self.stock_text.yview(*args)
+            self.name_text.yview(*args)
+        
+        def on_scrollbar_move(first, last):
+            """Update both scrollbars when either text widget scrolls"""
+            self.tickers_scrollbar.set(first, last)
+            self.names_scrollbar.set(first, last)
+        
+        # Configure scrollbars to use synchronized scrolling
+        self.tickers_scrollbar.config(command=sync_scroll)
+        self.names_scrollbar.config(command=sync_scroll)
+        
+        # Configure text widgets to update both scrollbars
+        self.stock_text.config(yscrollcommand=on_scrollbar_move)
+        self.name_text.config(yscrollcommand=on_scrollbar_move)
+        
+        # Bind mouse wheel to both text widgets for synchronized scrolling
+        def on_mousewheel(event):
+            """Handle mouse wheel scrolling on both widgets"""
+            self.stock_text.yview_scroll(int(-1*(event.delta/120)), "units")
+            self.name_text.yview_scroll(int(-1*(event.delta/120)), "units")
+            return "break"  # Prevent default scrolling
+        
+        self.stock_text.bind("<MouseWheel>", on_mousewheel)
+        self.name_text.bind("<MouseWheel>", on_mousewheel)
 
         # Fetch names on load
         self.update_stock_names()
@@ -1500,16 +1528,24 @@ Respond with ONLY the hex color code (e.g., #FF6B35). No explanations, just the 
                 seen.add(ticker_upper)
                 deduplicated_tickers.append(ticker_upper)
         
-        # If duplicates found, notify user and update UI
+        # Sort alphabetically
+        deduplicated_tickers.sort()
+        
+        # If duplicates found or order changed, notify user and update UI
         if duplicates:
             duplicate_list = ", ".join(sorted(duplicates))
-            message = f"Duplicate ticker(s) detected and removed:\n\n{duplicate_list}\n\nThe stock universe has been cleaned up."
+            message = f"Duplicate ticker(s) detected and removed:\n\n{duplicate_list}\n\nThe stock universe has been cleaned up and sorted alphabetically."
             messagebox.showwarning("Duplicates Removed", message)
             self.log_app_event("WARNING", f"Removed duplicate tickers: {duplicate_list}")
             
-            # Update UI with deduplicated list
+            # Update UI with deduplicated and sorted list
             self.stock_text.delete("1.0", tk.END)
             self.stock_text.insert("1.0", "\n".join(deduplicated_tickers))
+        elif deduplicated_tickers != tickers:
+            # No duplicates but order changed - update UI silently
+            self.stock_text.delete("1.0", tk.END)
+            self.stock_text.insert("1.0", "\n".join(deduplicated_tickers))
+            self.log_app_event("INFO", "Stock universe sorted alphabetically")
         
         self.config["stock_universe"] = deduplicated_tickers
         

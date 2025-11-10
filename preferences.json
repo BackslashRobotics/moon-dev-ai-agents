@@ -1,12 +1,13 @@
 {
     "config_tab": {
         "stock_text_height": 30,
-        "stock_text_width": 10,
+        "stock_text_width": 8,
         "ticker_font_size": 10,
         "name_font_size": 9,
         "auto_refresh_colors": true,
         "confirm_save": true,
-        "save_notification_duration_ms": 3000
+        "save_notification_duration_ms": 3000,
+        "stock_names_width": 40
     },
     "dashboard_tab": {
         "table_col_widths": {
