@@ -1,4 +1,4 @@
-# Version 118
+# Version 121
 # ============================================================================
 # VERSION UPDATE CHECKLIST - READ THIS BEFORE EDITING!
 # ============================================================================
@@ -54,6 +54,11 @@ import finnhub  # For stock names
 from utils.ansi_parser import ANSIParser
 from config.tooltips import TOOLTIP_DESCRIPTIONS
 from utils.window_position import WindowPositionManager
+from src.data.cdem.earnings_history_manager import (
+    load_earnings_history,
+    get_ticker_movement,
+    backfill_missing_movements
+)
 
 plt.style.use("dark_background")  # Added for Matplotlib dark mode
 
@@ -70,7 +75,7 @@ AGENT_SCRIPT = os.path.join("src", "agents", "cdem_agent.py")
 # Ensure logs directory exists
 os.makedirs("logs", exist_ok=True)
 
-# Clear app logs and grok logs on startup for fresh sessions
+# Clear all logs on startup for fresh sessions
 try:
     with open(APP_LOG_PATH, "w") as f:
         f.write("")  # Clear app logs
@@ -82,6 +87,13 @@ try:
     with open(GROK_LOG_PATH, "w") as f:
         f.write("[]")  # Clear grok logs with empty JSON array
     print("✓ Grok logs cleared for new session")
+except:
+    pass  # File might not exist yet
+
+try:
+    with open(LOG_PATH, "w") as f:
+        f.write("")  # Clear terminal logs
+    print("✓ Terminal logs cleared for new session")
 except:
     pass  # File might not exist yet
 
@@ -1185,6 +1197,96 @@ class CDEMApp:
         )
         self.config_save_status.pack(fill="x", padx=5)
 
+        # ============ STRATEGY INFO PANEL ============
+        info_frame = tk.LabelFrame(left_frame, text="📚 How The CDEM Strategy Works", 
+                                    bg="black", fg="lightblue", font=("Arial", 10, "bold"),
+                                    bd=2, relief="groove", padx=10, pady=5)
+        info_frame.pack(fill="both", expand=True, pady=(0, 8))
+        
+        strategy_info = tk.Text(
+            info_frame,
+            bg="gray10",
+            fg="lightgray",
+            font=("Arial", 9),
+            wrap="word",
+            height=20,
+            relief="flat",
+            padx=10,
+            pady=10
+        )
+        strategy_info.pack(fill="both", expand=True)
+        
+        # Strategy explanation text
+        strategy_text = """CONSENSUS-DRIVEN EARNINGS MANAGEMENT (CDEM)
+
+📅 WHAT IT DOES:
+• Monitors earnings calendar for all stocks in your universe
+• Analyzes market sentiment 1 day before earnings using Grok AI
+• Enters long positions only when sentiment is strongly positive
+• Automatically manages risk with stop losses and trailing stops
+• Invests idle cash in SPY (or other ETF) when not actively trading
+
+🔍 HOW IT WORKS (Step-by-Step):
+
+1. CALENDAR MONITORING
+   • Scans for earnings dates in the next 7 days
+   • Checks every [Check Interval] minutes
+
+2. SENTIMENT ANALYSIS (T-1 Day Before Earnings)
+   • Runs 5 separate AI analyses using Grok
+   • Analyzes: Twitter/X, Reddit, StockTwits, Seeking Alpha, Bloomberg
+   • Looks for leaks, hype, institutional sentiment
+   • Scores each analysis 0-100 (bearish to bullish)
+   • Averages the 5 scores for final consensus
+
+3. ENTRY DECISION
+   • Score > 70: "Good" → Enter long position
+   • Score 40-70: "Mixed" → Hold, no entry
+   • Score < 40: "Bad" → No entry
+
+4. POSITION SIZING
+   • Risk Amount = Portfolio Value × Risk Per Trade %
+   • Position Size = Risk Amount ÷ (Entry Price - Stop Price)
+   • Checks: Available buying power, max exposure limits
+
+5. RISK PROTECTION (Automatic)
+   • Stop Loss: Placed at entry price - Stop Loss %
+   • Trailing Stop: Activates when profit > Trailing Trigger %
+   • Then trails the price by Trailing Stop %
+   • Example: If price rises 10%, stop moves up to lock in 5% profit
+
+6. EXIT STRATEGY
+   • Automatic exit 1 day after earnings report
+   • OR if stop loss/trailing stop is hit
+   • Immediately re-invests proceeds into SPY if idle investing is on
+
+7. IDLE CAPITAL MANAGEMENT
+   • When no active trades: Invests in SPY (or selected ETF)
+   • When trade opens: Sells enough SPY to fund the trade
+   • When trade closes: Re-buys SPY with proceeds
+   • This keeps your capital working at all times
+
+🎯 TRADING PHILOSOPHY:
+• Capture pre-earnings momentum from sentiment leaks
+• Only trade when AI detects strong positive consensus
+• Use strict risk management on every trade
+• Stay invested in the market (SPY) when not trading
+• Diversify across 50+ stocks to spread risk
+
+⚠️ IMPORTANT NOTES:
+• Test Mode: Runs analysis without waiting for T-1 day (for testing)
+• Paper Trading: Trades with fake money on Tradier sandbox
+• Master On: Must be enabled for agent to run
+• Always start with Paper Trading to verify strategy performance"""
+        
+        strategy_info.insert("1.0", strategy_text)
+        strategy_info.config(state="disabled")  # Make read-only
+        
+        # Add scrollbar to info panel
+        info_scrollbar = ttk.Scrollbar(info_frame, command=strategy_info.yview)
+        strategy_info.config(yscrollcommand=info_scrollbar.set)
+        # Note: Scrollbar is not packed to keep it hidden unless needed (can add if desired)
+
         # Stock Universe
         ttk.Label(right_frame, text="Stock Universe:").grid(row=0, column=0, sticky="w")
         
@@ -2195,7 +2297,12 @@ Respond with ONLY the hex color code (e.g., #FF6B35). No explanations, just the 
   - Green: Good (positive outlook, likely to beat)
   - Orange: Mixed (uncertain, balanced views)
   - Red: Bad (negative outlook, concerns)
-  - Gray: Pending (not yet analyzed)"""
+  - Gray: Pending (not yet analyzed)
+• Movement %: Price change from earnings day close to next day close
+  - Green: Positive movement (stock went up)
+  - Red: Negative movement (stock went down)
+  - Gray: Not yet available (calculated retroactively after earnings)
+  - Data clears 3 days before next earnings"""
         
         ToolTip(dashboard_info, dashboard_tooltip)
         
@@ -2235,6 +2342,9 @@ Respond with ONLY the hex color code (e.g., #FF6B35). No explanations, just the 
         self.stock_table_text.tag_config("cyan", foreground="cyan")
         self.stock_table_text.tag_config("red_date", foreground="red")
         self.stock_table_text.tag_config("white", foreground="white")
+        self.stock_table_text.tag_config("movement_up", foreground="lightgreen")
+        self.stock_table_text.tag_config("movement_down", foreground="red")
+        self.stock_table_text.tag_config("movement_na", foreground="gray")
 
         # Status Label
         self.status_label = ttk.Label(right_frame, text="Agent Status: Stopped", foreground="red")
@@ -2520,11 +2630,20 @@ Respond with ONLY the hex color code (e.g., #FF6B35). No explanations, just the 
         try:
             from datetime import datetime
             
+            # Backfill any missing movement calculations
+            try:
+                backfill_missing_movements()
+            except Exception as e:
+                print(f"Warning: Backfill failed: {e}")
+            
+            # Load earnings history for movement data
+            earnings_history = load_earnings_history()
+            
             # Build new content first to check if update is needed
             new_content_lines = []
             
-            # Build header (Fixed width)
-            header = f"{'Ticker':<10}{'Earnings Date':<15}{'Trade Time':<15}{'Sentiment':<10}\n"
+            # Build header (Fixed width) - Added Movement % column
+            header = f"{'Ticker':<10}{'Earnings Date':<15}{'Trade Time':<15}{'Sentiment':<15}{'Movement %':<12}\n"
 
             # Parse logs for earnings and consensus
             earnings = {}
@@ -2564,6 +2683,15 @@ Respond with ONLY the hex color code (e.g., #FF6B35). No explanations, just the 
                 trade_time = trade_times.get(ticker, "N/A")
                 sent = sentiment.get(ticker, "Pending")
                 
+                # Get movement data from history
+                movement = get_ticker_movement(ticker)
+                if movement is not None:
+                    movement_str = f"{movement:+.2f}%"
+                    movement_tag = "movement_up" if movement > 0 else "movement_down"
+                else:
+                    movement_str = "N/A"
+                    movement_tag = "movement_na"
+                
                 # Determine sentiment tag
                 tag = "pending"
                 if "Good" in sent:
@@ -2591,7 +2719,9 @@ Respond with ONLY the hex color code (e.g., #FF6B35). No explanations, just the 
                     "sentiment": sent,
                     "tag": tag,
                     "is_past": is_past,
-                    "sort_date": sort_date
+                    "sort_date": sort_date,
+                    "movement": movement_str,
+                    "movement_tag": movement_tag
                 })
             
             # Sort: upcoming (soonest first), then past (most recent first)
@@ -2608,7 +2738,7 @@ Respond with ONLY the hex color code (e.g., #FF6B35). No explanations, just the 
             # Build sorted rows as plain text for comparison
             new_content = header
             for row in table_data:
-                new_content += f"{row['ticker']:<10}{row['date']:<15}{row['trade_time']:<15}{row['sentiment']}\n"
+                new_content += f"{row['ticker']:<10}{row['date']:<15}{row['trade_time']:<15}{row['sentiment']:<15}{row['movement']}\n"
             
             # Only update if content changed (prevents flashing)
             current_content = self.stock_table_text.get("1.0", tk.END)
@@ -2626,7 +2756,9 @@ Respond with ONLY the hex color code (e.g., #FF6B35). No explanations, just the 
                     # Trade time in white
                     self.stock_table_text.insert(tk.END, f"{row['trade_time']:<15}", "white")
                     # Sentiment with appropriate color
-                    self.stock_table_text.insert(tk.END, row["sentiment"], row["tag"])
+                    self.stock_table_text.insert(tk.END, f"{row['sentiment']:<15}", row["tag"])
+                    # Movement with appropriate color
+                    self.stock_table_text.insert(tk.END, row["movement"], row["movement_tag"])
                     self.stock_table_text.insert(tk.END, "\n")
                 
                 # Update scrollbar visibility after content change
@@ -3273,7 +3405,16 @@ Respond with ONLY the hex color code (e.g., #FF6B35). No explanations, just the 
                 # Split by ANSI codes (Method 7: Accumulate)
                 parts = re.split(r'(\x1b\[\d+m)', line)
                 
-                # Process for Terminal Logs (with timestamp)
+                # Write to terminal_logs.txt file (with timestamp, strip ANSI for file)
+                try:
+                    timestamp = f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] "
+                    clean_line = re.sub(r'\x1b\[\d+m', '', line)  # Remove ANSI codes for file
+                    with open(LOG_PATH, "a", encoding="utf-8") as f:
+                        f.write(f"{timestamp}{clean_line}\n")
+                except Exception as e:
+                    print(f"Failed to write to terminal log file: {e}")
+                
+                # Process for Terminal Logs UI (with timestamp and colors)
                 timestamp = f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] "
                 self.logs_text.insert(tk.END, timestamp, "white")
                 

@@ -1,4 +1,4 @@
-# Version: 66
+# Version: 68
 # REMINDER: Increase version number by 1 for every edit to this code.
 """
 Consensus-Driven Earnings Momentum (CDEM) Agent
@@ -81,6 +81,10 @@ import re  # For parsing simulated tool calls
 import yfinance as yf  # Added for options chain (if USE_OPTIONS=True)
 from threading import Thread, Event  # For timeout wrapper
 from dotenv import load_dotenv  # FIXED: Added missing import
+
+# Import earnings history manager for dashboard
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "src", "data", "cdem")))
+from earnings_history_manager import update_ticker_history, clear_old_history_if_needed
 
 # Config file path
 CONFIG_PATH = "config.json"
@@ -481,10 +485,13 @@ class CDEMAgent:
                     cprint(f"SPY initialization failed. Continuing without...", "yellow")
 
     def get_earnings_calendar(self, universe):
-        """Fetch upcoming earnings calendar using Finnhub API with retry"""
+        """Fetch upcoming earnings calendar using Finnhub API with retry and rate limiting"""
         today = datetime.today().date()
         end_date = today + timedelta(days=7)
         calendar = {}
+
+        # Rate limit: Finnhub free tier = 60 calls/min (1 per second)
+        time.sleep(1.1)  # Sleep before API call to respect rate limit
 
         for attempt in range(3):
             try:
@@ -502,7 +509,12 @@ class CDEMAgent:
                     cprint("No earnings data returned from Finnhub.", "yellow")
             except Exception as e:
                 cprint(f"Finnhub calendar error (attempt {attempt+1}): {str(e)}", "red")
-                time.sleep(5)
+                # Check if it's a rate limit error
+                if "429" in str(e) or "limit" in str(e).lower():
+                    cprint("Rate limit hit, waiting 60 seconds before retry...", "yellow")
+                    time.sleep(60)  # Wait full minute on rate limit
+                else:
+                    time.sleep(5)
         cprint("Finnhub calendar failed after 3 attempts.", "red")
         return calendar
 
@@ -511,7 +523,10 @@ class CDEMAgent:
         today = datetime.today().date()
         start_date = today - timedelta(days=120)  # Look back 120 days
         
-        for attempt in range(3):
+        # Rate limit: Finnhub free tier = 60 calls/min (1 per second)
+        time.sleep(1.1)  # Sleep before API call to respect rate limit
+        
+        for attempt in range(1):  # Reduced to 1 attempt for non-critical past earnings data
             try:
                 earnings_data = finnhub_client.earnings_calendar(_from=str(start_date), to=str(today), symbol=ticker)
                 if "earningsCalendar" in earnings_data and earnings_data["earningsCalendar"]:
@@ -528,8 +543,12 @@ class CDEMAgent:
                         return most_recent
                 return None
             except Exception as e:
-                cprint(f"Error fetching past earnings for {ticker} (attempt {attempt+1}): {str(e)}", "red")
-                time.sleep(2)
+                cprint(f"Error fetching past earnings for {ticker}: {str(e)}", "red")
+                # Don't retry on rate limit errors to avoid further delays
+                if "429" in str(e) or "limit" in str(e).lower():
+                    cprint(f"Rate limit hit for {ticker}, skipping past earnings check", "yellow")
+                    return None
+                time.sleep(1.1)
         return None
 
     def perform_daily_check(self):
@@ -560,6 +579,12 @@ class CDEMAgent:
         # Now process each ticker with upcoming earnings (sentiment analysis + trading)
         for ticker, earnings_date in calendar.items():
             try:
+                # Clear old history if new earnings is within 3 days
+                try:
+                    clear_old_history_if_needed(ticker, earnings_date)
+                except Exception as e:
+                    cprint(f"Warning: Failed to clear old history for {ticker}: {e}", "yellow")
+                
                 consensus, score = self.assess_consensus(ticker, earnings_date)
                 if consensus == "Good":
                     self.execute_trade(ticker, consensus)
@@ -741,6 +766,13 @@ Detect leaks/hype. Reason step-by-step before classifying. Return as JSON: {{"cl
             }
         )
         df.to_csv("src/data/cdem/sentiment_history.csv", mode="a", header=False, index=False)
+        
+        # Update earnings history for dashboard
+        try:
+            update_ticker_history(ticker, earnings_date, sentiment_score=avg_score, consensus=consensus)
+        except Exception as e:
+            cprint(f"Warning: Failed to update earnings history for {ticker}: {e}", "yellow")
+        
         return consensus, avg_score
 
     def _get_account_info(self, ticker):

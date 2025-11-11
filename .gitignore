@@ -72,6 +72,11 @@ logs/  # All log files organized in logs directory
 config.json
 window_position.json
 
+# CDEM Agent Runtime Data
+src/data/cdem/earnings_history.json
+src/data/cdem/sentiment_history.csv
+src/data/cdem/portfolio.csv
+
 # Test and Development Files
 test_files/
 
