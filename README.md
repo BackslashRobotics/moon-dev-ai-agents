@@ -1,3 +1,5 @@
+DISCLAIMER: This README was written by AI and may contain inaccuracies
+
 # 📊 CDEM Trading Agent - Consensus-Driven Earnings Management
 
 A sophisticated GUI-driven stock trading system that combines AI-powered sentiment analysis with earnings calendar management. Built on Moon Dev's AI agent framework.
