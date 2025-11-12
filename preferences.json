@@ -3,7 +3,7 @@
         "stock_text_height": 30,
         "stock_text_width": 8,
         "ticker_font_size": 10,
-        "name_font_size": 9,
+        "name_font_size": 10,
         "auto_refresh_colors": true,
         "confirm_save": true,
         "save_notification_duration_ms": 3000,
@@ -21,7 +21,13 @@
         "auto_scroll": true,
         "show_past_earnings": true,
         "max_log_lines": 1000,
-        "refresh_rate_ms": 1000
+        "refresh_rate_ms": 1000,
+        "ticker_width": 8,
+        "past_width": 12,
+        "upcoming_width": 12,
+        "trade_time_width": 15,
+        "sentiment_width": 15,
+        "movement_width": 12
     },
     "visuals_tab": {
         "chart_size": [
@@ -55,7 +61,7 @@
     },
     "grok_logs_tab": {
         "font_size": 10,
-        "response_text_width": 140,
+        "response_text_width": 130,
         "timestamp_color": "magenta",
         "show_separators": true,
         "auto_scroll": true,

@@ -1,4 +1,4 @@
-# Version: 68
+# Version: 76
 # REMINDER: Increase version number by 1 for every edit to this code.
 """
 Consensus-Driven Earnings Momentum (CDEM) Agent
@@ -79,7 +79,8 @@ import torch  # For any NLP if needed
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer  # Fallback
 import re  # For parsing simulated tool calls
 import yfinance as yf  # Added for options chain (if USE_OPTIONS=True)
-from threading import Thread, Event  # For timeout wrapper
+from threading import Thread, Event, Lock  # For timeout wrapper and file locking
+from concurrent.futures import ThreadPoolExecutor, as_completed  # For parallel sentiment calls
 from dotenv import load_dotenv  # FIXED: Added missing import
 
 # Import earnings history manager for dashboard
@@ -87,10 +88,13 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..",
 from earnings_history_manager import update_ticker_history, clear_old_history_if_needed
 
 # Config file path
-CONFIG_PATH = "config.json"
+CONFIG_PATH = "app_data/config.json"
 
 # Log file for Grok interactions (in logs directory)
 GROK_LOG_PATH = os.path.join("logs", "grok_logs.json")
+
+# File lock for thread-safe logging (prevents corrupted JSON from parallel writes)
+GROK_LOG_LOCK = Lock()
 
 # Ensure logs directory exists
 os.makedirs("logs", exist_ok=True)
@@ -190,7 +194,7 @@ def get_tradier_account():
         response = requests.get(
             f"{config['base_url']}/v1/accounts/{config['account_id']}/balances",
             headers=config['headers'],
-            timeout=10
+            timeout=30
         )
         response.raise_for_status()
         data = response.json()
@@ -212,7 +216,7 @@ def get_tradier_positions():
         response = requests.get(
             f"{config['base_url']}/v1/accounts/{config['account_id']}/positions",
             headers=config['headers'],
-            timeout=10
+            timeout=30
         )
         response.raise_for_status()
         data = response.json()
@@ -286,7 +290,7 @@ def submit_tradier_order(symbol, side, qty=None, order_type="market", stop_price
             f"{config['base_url']}/v1/accounts/{config['account_id']}/orders",
             headers=config['headers'],
             data=payload,
-            timeout=10
+            timeout=30
         )
         response.raise_for_status()
         data = response.json()
@@ -311,7 +315,7 @@ def get_tradier_quote(symbol):
             f"{config['base_url']}/v1/markets/quotes",
             headers=config['headers'],
             params={"symbols": symbol},
-            timeout=10
+            timeout=30
         )
         response.raise_for_status()
         data = response.json()
@@ -405,7 +409,7 @@ class CDEMAgent:
         #     spy_value = float(spy_position.market_value)
         # except:
         #     spy_value = 0
-        
+
         # TRADIER:
         account = get_tradier_account()
         if account is None:
@@ -485,14 +489,16 @@ class CDEMAgent:
                     cprint(f"SPY initialization failed. Continuing without...", "yellow")
 
     def get_earnings_calendar(self, universe):
-        """Fetch upcoming earnings calendar using Finnhub API with retry and rate limiting"""
+        """Fetch upcoming earnings calendar using Finnhub API with retry and rate limiting
+        Returns: dict with ticker: {"date": date_obj, "hour": "bmc"/"bmo"/"amc"}
+        """
         today = datetime.today().date()
         end_date = today + timedelta(days=7)
         calendar = {}
 
         # Rate limit: Finnhub free tier = 60 calls/min (1 per second)
         time.sleep(1.1)  # Sleep before API call to respect rate limit
-
+        
         for attempt in range(3):
             try:
                 earnings_data = finnhub_client.earnings_calendar(_from=str(today), to=str(end_date), symbol="")
@@ -502,8 +508,12 @@ class CDEMAgent:
                         if ticker in universe:
                             earnings_date = datetime.strptime(event["date"], "%Y-%m-%d").date()
                             if today < earnings_date <= end_date:
-                                calendar[ticker] = earnings_date
-                                cprint(f"Found earnings for {ticker} on {earnings_date}", "green")
+                                earnings_hour = event.get("hour", "amc")  # Default to after-market close
+                                calendar[ticker] = {
+                                    "date": earnings_date,
+                                    "hour": earnings_hour
+                                }
+                                cprint(f"Found earnings for {ticker} on {earnings_date} ({earnings_hour})", "green")
                     return calendar
                 else:
                     cprint("No earnings data returned from Finnhub.", "yellow")
@@ -518,38 +528,54 @@ class CDEMAgent:
         cprint("Finnhub calendar failed after 3 attempts.", "red")
         return calendar
 
-    def get_past_earnings_date(self, ticker):
-        """Fetch the most recent past earnings date for a ticker"""
+    def get_past_earnings_bulk(self, universe):
+        """Fetch the most recent past earnings for ALL tickers in ONE bulk API call
+        Returns: dict with ticker: {"date": date_obj, "hour": "bmc"/"bmo"/"amc"}
+        """
         today = datetime.today().date()
         start_date = today - timedelta(days=120)  # Look back 120 days
+        past_calendar = {}
         
         # Rate limit: Finnhub free tier = 60 calls/min (1 per second)
         time.sleep(1.1)  # Sleep before API call to respect rate limit
         
-        for attempt in range(1):  # Reduced to 1 attempt for non-critical past earnings data
+        cprint(f"Fetching past earnings for {len(universe)} tickers (bulk call)...", "cyan")
+        
+        for attempt in range(3):  # Up to 3 attempts for bulk call
             try:
-                earnings_data = finnhub_client.earnings_calendar(_from=str(start_date), to=str(today), symbol=ticker)
+                # BULK CALL: symbol="" fetches ALL tickers at once
+                earnings_data = finnhub_client.earnings_calendar(_from=str(start_date), to=str(today), symbol="")
                 if "earningsCalendar" in earnings_data and earnings_data["earningsCalendar"]:
-                    # Get the most recent past earnings
-                    past_earnings = []
+                    # Build dictionary of most recent past earnings for each ticker in universe
                     for event in earnings_data["earningsCalendar"]:
-                        if event.get("symbol") == ticker:
+                        ticker = event.get("symbol")
+                        if ticker in universe:
                             earnings_date = datetime.strptime(event["date"], "%Y-%m-%d").date()
                             if earnings_date < today:
-                                past_earnings.append(earnings_date)
+                                earnings_hour = event.get("hour", "amc")  # Default to after-market close
+                                # Keep only the MOST RECENT past earnings per ticker
+                                if ticker not in past_calendar or earnings_date > past_calendar[ticker]["date"]:
+                                    past_calendar[ticker] = {
+                                        "date": earnings_date,
+                                        "hour": earnings_hour
+                                    }
                     
-                    if past_earnings:
-                        most_recent = max(past_earnings)
-                        return most_recent
-                return None
+                    cprint(f"Found past earnings for {len(past_calendar)} tickers", "green")
+                    return past_calendar
+                else:
+                    cprint("No past earnings data returned from Finnhub.", "yellow")
+                    return past_calendar
             except Exception as e:
-                cprint(f"Error fetching past earnings for {ticker}: {str(e)}", "red")
-                # Don't retry on rate limit errors to avoid further delays
+                cprint(f"Finnhub past earnings bulk error (attempt {attempt+1}): {str(e)}", "red")
+                # Check if it's a rate limit error
                 if "429" in str(e) or "limit" in str(e).lower():
-                    cprint(f"Rate limit hit for {ticker}, skipping past earnings check", "yellow")
-                    return None
-                time.sleep(1.1)
-        return None
+                    cprint("Rate limit hit, waiting 60 seconds before retry...", "yellow")
+                    time.sleep(60)  # Wait full minute on rate limit
+                else:
+                    time.sleep(5)
+        
+        cprint("Finnhub past earnings bulk call failed after 3 attempts.", "red")
+        return past_calendar
 
     def perform_daily_check(self):
         """Main daily check: Get earnings calendar, assess consensus, execute trades"""
@@ -564,28 +590,39 @@ class CDEMAgent:
         if not calendar:
             cprint("No earnings found in next 7 days.", "yellow")
         
-        # First, report ALL earnings dates (upcoming and past) before doing any analysis
-        for ticker in universe:
-            if ticker not in calendar:
-                try:
-                    past_date = self.get_past_earnings_date(ticker)
-                    if past_date:
-                        cprint(f"No upcoming earnings for {ticker} (last: {past_date})", "yellow")
-                    else:
-                        cprint(f"No earnings data found for {ticker}", "yellow")
-                except Exception as e:
-                    cprint(f"Error checking past earnings for {ticker}: {str(e)}", "red")
+        # Fetch past earnings for all tickers WITHOUT upcoming earnings (ONE bulk call instead of N individual calls)
+        tickers_without_upcoming = [t for t in universe if t not in calendar]
+        if tickers_without_upcoming:
+            past_calendar = self.get_past_earnings_bulk(tickers_without_upcoming)
+            
+            # Report and store past earnings
+            for ticker in tickers_without_upcoming:
+                if ticker in past_calendar:
+                    past_info = past_calendar[ticker]
+                    past_date = past_info["date"]
+                    past_hour = past_info["hour"]
+                    cprint(f"No upcoming earnings for {ticker} (last: {past_date} {past_hour})", "yellow")
+                    # Store past earnings date for persistence (Finnhub only looks back 120 days)
+                    try:
+                        update_ticker_history(ticker, past_date, sentiment_score=None, consensus=None, earnings_hour=past_hour)
+                    except Exception as e:
+                        cprint(f"Warning: Failed to store past earnings date for {ticker}: {e}", "yellow")
+                else:
+                    cprint(f"No earnings data found for {ticker}", "yellow")
         
         # Now process each ticker with upcoming earnings (sentiment analysis + trading)
-        for ticker, earnings_date in calendar.items():
+        for ticker, earnings_info in calendar.items():
             try:
-                # Clear old history if new earnings is within 3 days
+                earnings_date = earnings_info["date"]
+                earnings_hour = earnings_info["hour"]
+                
+                # Clear old history if new earnings is within 7 days (changed from 3)
                 try:
                     clear_old_history_if_needed(ticker, earnings_date)
                 except Exception as e:
                     cprint(f"Warning: Failed to clear old history for {ticker}: {e}", "yellow")
                 
-                consensus, score = self.assess_consensus(ticker, earnings_date)
+                consensus, score = self.assess_consensus(ticker, earnings_date, earnings_hour)
                 if consensus == "Good":
                     self.execute_trade(ticker, consensus)
             except Exception as e:
@@ -611,15 +648,25 @@ class CDEMAgent:
                 # Check if this ticker has upcoming earnings
                 calendar = self.get_earnings_calendar([ticker])
                 if ticker in calendar:
-                    earnings_date = calendar[ticker]
-                    consensus, score = self.assess_consensus(ticker, earnings_date)
+                    earnings_info = calendar[ticker]
+                    earnings_date = earnings_info["date"]
+                    earnings_hour = earnings_info["hour"]
+                    consensus, score = self.assess_consensus(ticker, earnings_date, earnings_hour)
                     if consensus == "Good":
                         self.execute_trade(ticker, consensus)
                 else:
                     # Check for past earnings
-                    past_date = self.get_past_earnings_date(ticker)
-                    if past_date:
-                        cprint(f"No upcoming earnings for {ticker} (last: {past_date})", "yellow")
+                    past_calendar = self.get_past_earnings_bulk([ticker])
+                    if ticker in past_calendar:
+                        past_info = past_calendar[ticker]
+                        past_date = past_info["date"]
+                        past_hour = past_info["hour"]
+                        cprint(f"No upcoming earnings for {ticker} (last: {past_date} {past_hour})", "yellow")
+                        # Store past earnings date for persistence (Finnhub only looks back 120 days)
+                        try:
+                            update_ticker_history(ticker, past_date, sentiment_score=None, consensus=None, earnings_hour=past_hour)
+                        except Exception as e:
+                            cprint(f"Warning: Failed to store past earnings date for {ticker}: {e}", "yellow")
                     else:
                         cprint(f"No upcoming earnings found for {ticker}", "yellow")
             except Exception as e:
@@ -627,25 +674,30 @@ class CDEMAgent:
                 continue
 
     def log_grok_interaction(self, sent_text=None, received_text=None, ticker=None, scores=None, avg_score=None):
-        """Log sent prompt, received response, or scores/avg to grok_logs.json"""
-        if not os.path.exists(GROK_LOG_PATH):
-            with open(GROK_LOG_PATH, "w") as f:
-                json.dump([], f)
+        """Log sent prompt, received response, or scores/avg to grok_logs.json (thread-safe)"""
+        with GROK_LOG_LOCK:  # Prevent concurrent writes from parallel threads
+            try:
+                if not os.path.exists(GROK_LOG_PATH):
+                    with open(GROK_LOG_PATH, "w") as f:
+                        json.dump([], f)
 
-        with open(GROK_LOG_PATH, "r+") as f:
-            logs = json.load(f)
-            entry = {"timestamp": datetime.now().isoformat()}
-            if sent_text is not None:
-                entry["sent"] = sent_text
-            if received_text is not None:
-                entry["received"] = received_text
-            if ticker is not None and scores is not None and avg_score is not None:
-                entry["ticker"] = ticker
-                entry["scores"] = scores
-                entry["avg_score"] = avg_score
-            logs.append(entry)
-            f.seek(0)
-            json.dump(logs, f, indent=4)
+                with open(GROK_LOG_PATH, "r+") as f:
+                    logs = json.load(f)
+                    entry = {"timestamp": datetime.now().isoformat()}
+                    if sent_text is not None:
+                        entry["sent"] = sent_text
+                    if received_text is not None:
+                        entry["received"] = received_text
+                    if ticker is not None and scores is not None and avg_score is not None:
+                        entry["ticker"] = ticker
+                        entry["scores"] = scores
+                        entry["avg_score"] = avg_score
+                    logs.append(entry)
+                    f.seek(0)
+                    f.truncate()  # Clear file before writing to prevent leftover data
+                    json.dump(logs, f, indent=4)
+            except Exception as e:
+                cprint(f"Error logging to grok_logs.json: {e}", "red")
 
     def _call_grok_with_timeout(self, system_prompt, user_prompt, timeout=180):
         """Call Grok API with timeout protection and return response or None."""
@@ -678,12 +730,29 @@ class CDEMAgent:
             return None
 
         try:
-            parsed = json.loads(response.content.strip())
-            if "classification" in parsed and "score" in parsed:
-                return parsed["score"]
+            content = response.content.strip()
+            
+            # Try to extract JSON from response (Grok sometimes adds text before/after JSON)
+            # Look for JSON object boundaries
+            json_start = content.find('{')
+            json_end = content.rfind('}')
+            
+            if json_start != -1 and json_end != -1 and json_end > json_start:
+                json_str = content[json_start:json_end+1]
+                parsed = json.loads(json_str)
+                
+                if "classification" in parsed and "score" in parsed:
+                    return parsed["score"]
+                else:
+                    cprint("Parse error: Missing keys. Retrying...", "red")
+                    return None
             else:
-                cprint("Parse error: Missing keys. Retrying...", "red")
+                cprint("Parse error: No JSON object found in response. Retrying...", "red")
                 return None
+                
+        except json.JSONDecodeError as e:
+            cprint(f"JSON decode error: {str(e)}. Retrying...", "red")
+            return None
         except Exception as e:
             cprint(f"Parse error: {str(e)}. Retrying...", "red")
             return None
@@ -703,14 +772,14 @@ class CDEMAgent:
 
         return consensus, avg_score
 
-    def assess_consensus(self, ticker, earnings_date):
+    def assess_consensus(self, ticker, earnings_date, earnings_hour="amc"):
         """Assess consensus 1 day before earnings using Grok LLM with prompt-engineered tools"""
         today = datetime.today().date()
         check_date = earnings_date - timedelta(days=1)
         cprint(f"Debug: Today {today}, Check date {check_date} for {ticker}", "grey")
 
         if not self.config["test_mode"] and today != check_date:
-            cprint(f"Skipping {ticker}: Not T-1 day (check_date: {check_date})", "yellow")
+            cprint(f"Skipping {ticker}: Not T-1 day (check_date: {check_date})", "light_grey", end=' ')
             return None, None
 
         # Build prompts for sentiment analysis
@@ -724,12 +793,9 @@ Detect leaks/hype. Reason step-by-step before classifying. Return as JSON: {{"cl
 """
         system_prompt = "You are a financial sentiment analyst. Respond ONLY with valid JSON for the classification. No additional text, explanations, or formatting."
 
-        # Collect sentiment scores across 5 runs
-        scores = []
-        for run in range(5):
-            cprint(f"Run {run+1}/5 for sentiment on {ticker}", "magenta")
-
-            # Retry up to 10 times per run
+        # Helper function for single sentiment run (with retries)
+        def run_sentiment_analysis(run_num):
+            """Run a single sentiment analysis with retries"""
             for attempt in range(10):
                 response = self._call_grok_with_timeout(system_prompt, prompt)
                 if response is None:
@@ -739,11 +805,29 @@ Detect leaks/hype. Reason step-by-step before classifying. Return as JSON: {{"cl
 
                 score = self._parse_sentiment_response(response)
                 if score is not None:
-                    scores.append(score)
-                    cprint(f"Score for run {run+1}: {score}", "light_green")
-                    break
-            else:
-                cprint(f"Failed to get valid score for run {run+1} after 10 attempts.", "red")
+                    cprint(f"Score for run {run_num}: {score}", "light_green")
+                    return score
+            
+            cprint(f"Failed to get valid score for run {run_num} after 10 attempts.", "red")
+            return None
+
+        # Collect sentiment scores across 5 runs IN PARALLEL
+        cprint(f"Running 5 parallel sentiment analyses for {ticker}...", "magenta")
+        scores = []
+        
+        with ThreadPoolExecutor(max_workers=5) as executor:
+            # Submit all 5 runs simultaneously
+            future_to_run = {executor.submit(run_sentiment_analysis, i+1): i+1 for i in range(5)}
+            
+            # Collect results as they complete
+            for future in as_completed(future_to_run):
+                run_num = future_to_run[future]
+                try:
+                    score = future.result()
+                    if score is not None:
+                        scores.append(score)
+                except Exception as e:
+                    cprint(f"Exception in run {run_num}: {e}", "red")
 
         # Calculate consensus from scores
         consensus, avg_score = self._calculate_consensus(scores)
@@ -769,7 +853,7 @@ Detect leaks/hype. Reason step-by-step before classifying. Return as JSON: {{"cl
         
         # Update earnings history for dashboard
         try:
-            update_ticker_history(ticker, earnings_date, sentiment_score=avg_score, consensus=consensus)
+            update_ticker_history(ticker, earnings_date, sentiment_score=avg_score, consensus=consensus, earnings_hour=earnings_hour)
         except Exception as e:
             cprint(f"Warning: Failed to update earnings history for {ticker}: {e}", "yellow")
         
@@ -893,16 +977,16 @@ Detect leaks/hype. Reason step-by-step before classifying. Return as JSON: {{"cl
         if active_exposure + (required_amount / portfolio_value) > self.config["max_exposure"]:
             cprint(f"Skipping {ticker}: Would exceed max exposure ({self.config['max_exposure']})", "yellow")
             return
-
+        
         # Free cash from SPY if needed
         if cash < required_amount and self.config["sp_on"]:
             free_needed = required_amount - cash
             self.manage_spy(free_needed, sell=True)
-
+        
         # Create order request
         order_data = self._create_order_request(ticker, position_size)
         if order_data is None:
-            return
+                return
 
         # ALPACA (commented out for Tradier swap):
         # Submit order
@@ -938,7 +1022,7 @@ Detect leaks/hype. Reason step-by-step before classifying. Return as JSON: {{"cl
         stop_order = submit_tradier_order(ticker, "sell", qty=order["qty"], order_type="stop", stop_price=stop_price)
         if stop_order is None:
             cprint(f"Stop order failed for {ticker}. Position unprotected!", "red")
-
+        
         # Log position
         df = pd.DataFrame(
             {
@@ -1007,7 +1091,7 @@ Detect leaks/hype. Reason step-by-step before classifying. Return as JSON: {{"cl
             cprint(f"Error saving portfolio.csv: {str(e)}", "red")
 
     def should_exit(self, ticker):
-        """Check if 1 day after earnings"""
+        """Check if exit time based on earnings hour (BMC=same day close, AMC=next day close)"""
         try:
             # Try to get earnings date from sentiment history
             df_sentiment = pd.read_csv("src/data/cdem/sentiment_history.csv")
@@ -1019,12 +1103,21 @@ Detect leaks/hype. Reason step-by-step before classifying. Return as JSON: {{"cl
                 # Check if earnings calendar has this ticker
                 calendar = self.get_earnings_calendar([ticker])
                 if ticker in calendar:
-                    earnings_date = calendar[ticker]
-                    # Exit 1 day after earnings
-                    exit_date = earnings_date + timedelta(days=1)
+                    earnings_info = calendar[ticker]
+                    earnings_date = earnings_info["date"]
+                    earnings_hour = earnings_info["hour"]
+                    
+                    # Calculate exit date based on earnings hour
                     today = datetime.today().date()
+                    if earnings_hour in ["bmc", "bmo"]:  # Before market open/close
+                        # Movement happens SAME DAY, exit at close same day
+                        exit_date = earnings_date
+                    else:  # "amc" - After market close
+                        # Movement happens NEXT DAY, exit at close next day
+                        exit_date = earnings_date + timedelta(days=1)
+                    
                     if today >= exit_date:
-                        cprint(f"{ticker}: Exit condition met (today {today} >= exit_date {exit_date})", "yellow")
+                        cprint(f"{ticker}: Exit condition met (today {today} >= exit_date {exit_date}, earnings_hour: {earnings_hour})", "yellow")
                         return True
                 # Fallback: if we have sentiment from T-1, assume earnings was T+1, exit T+2
                 # This is approximate but better than nothing
@@ -1059,13 +1152,13 @@ Detect leaks/hype. Reason step-by-step before classifying. Return as JSON: {{"cl
             return
         pnl = (price - trade["entry_price"]) * qty
         cprint(f"Exited {ticker}: PNL {pnl}", "blue")
-
+        
         # Update log
         df.at[trade.name, "current_price"] = price
         df.at[trade.name, "pnl"] = pnl
         df.at[trade.name, "status"] = "closed"
         df.to_csv("src/data/cdem/portfolio.csv", index=False)
-
+        
         # Revert to SPY if sp_on
         allocation = qty * price
         if self.config["sp_on"]:
@@ -1120,7 +1213,7 @@ Detect leaks/hype. Reason step-by-step before classifying. Return as JSON: {{"cl
             notional_amount = amount
             side = "buy"
             action = "Bought"
-        
+
         order = submit_tradier_order(SPY_SYMBOL, side, notional=notional_amount)
         if order:
             cprint(f"{action} SPY for ${notional_amount:.2f}", "cyan")
@@ -1157,12 +1250,12 @@ Detect leaks/hype. Reason step-by-step before classifying. Return as JSON: {{"cl
     def run(self):
         """Main loop with scheduling"""
         cprint("CDEM Agent starting (hourly checks)...", "green")
-
+        
         schedule.every().day.at("09:00").do(self.backtest_strategy)  # Daily backtest/review
         schedule.every().monday.do(self.get_earnings_calendar)  # Weekly calendar update
-
+        
         self.perform_daily_check()  # Initial check
-
+        
         while True:
             if not self.config["master_on"]:
                 cprint("Master switch off. Sleeping...", "yellow")

@@ -1,0 +1,340 @@
+[2025-11-12 00:34:16] [INFO] update_stock_names() called - spawning background thread
+[2025-11-12 00:34:16] [INFO] App Logs initialized
+[2025-11-12 00:34:16] [SUCCESS] CDEM Trading Agent UI started successfully
+[2025-11-12 00:34:16] [INFO] App UI Version: 134
+[2025-11-12 00:34:16] [INFO] CDEM Agent Version: 76
+[2025-11-12 00:34:16] [INFO] Config loaded: 158 tickers in universe
+[2025-11-12 00:34:16] [INFO] Paper Trading: Enabled
+[2025-11-12 00:34:16] [SUCCESS] Multi-threaded updates enabled for smooth UI performance
+[2025-11-12 00:34:16] [INFO] Config page organized into 5 sections: System, Risk, Exit, Idle Capital, Options
+[2025-11-12 00:34:16] [INFO] Idle capital target: QQQ
+[2025-11-12 00:34:16] [SUCCESS] All preferences applied on startup
+[2025-11-12 00:34:17] [SUCCESS] Config saved successfully
+[2025-11-12 00:34:17] [INFO] Config reloaded from file
+[2025-11-12 00:34:17] [INFO] Starting historical movement data backfill
+[2025-11-12 00:34:17] [INFO] Backfill check: 60 total tickers, 15 need movement data
+[2025-11-12 00:34:17] [INFO] Fetching 15 missing movement calculations from Grok...
+[2025-11-12 00:34:17] [SUCCESS] Backfill complete: 45/60 tickers now have movement data
+[2025-11-12 00:34:17] [DEBUG] Starting account balance fetch
+[2025-11-12 00:34:18] [DEBUG] 📤 PAPER API Request: GET https://sandbox.tradier.com/v1/accounts/VA65164161/balances
+[2025-11-12 00:34:18] [DEBUG] 📥 PAPER API Response: Status 200
+[2025-11-12 00:34:18] [DEBUG] 📊 PAPER Raw Balances: {'option_short_value': 0, 'total_equity': 200000.0, 'account_number': 'VA65164161', 'account_type': 'margin', 'close_pl': 0, 'current_requirement': 0, 'equity': 0, 'long_market_value': 0, 'market_value': 0, 'open_pl': 0, 'option_long_value': 0, 'option_requirement': 0, 'pending_orders_count': 0, 'short_market_value': 0, 'stock_long_value': 0, 'total_cash': 200000.0, 'uncleared_funds': 0, 'pending_cash': 0, 'margin': {'fed_call': 0, 'maintenance_call': 0, 'option_buying_power': 200000.0, 'stock_buying_power': 400000.0, 'stock_short_value': 0, 'sweep': 0}}
+[2025-11-12 00:34:18] [INFO] 💰 PAPER: total_equity=$200,000.00, margin.stock_buying_power=$400,000.00
+[2025-11-12 00:34:18] [DEBUG] 📤 LIVE API Request: GET https://api.tradier.com/v1/accounts/6YB66013/balances
+[2025-11-12 00:34:19] [DEBUG] 📥 LIVE API Response: Status 200
+[2025-11-12 00:34:19] [DEBUG] 📊 LIVE Raw Balances: {'option_short_value': 0, 'total_equity': 0, 'account_number': '6YB66013', 'account_type': 'cash', 'close_pl': 0, 'current_requirement': 0, 'equity': 0, 'long_market_value': 0, 'market_value': 0, 'open_pl': 0, 'option_long_value': 0, 'option_requirement': 0, 'pending_orders_count': 0, 'short_market_value': 0, 'stock_long_value': 0, 'total_cash': 0, 'uncleared_funds': 0, 'pending_cash': 0, 'cash': {'cash_available': 0.0, 'sweep': 0, 'unsettled_funds': 0}}
+[2025-11-12 00:34:19] [INFO] 💰 LIVE: total_equity=$0.00, cash.cash_available=$0.00
+[2025-11-12 00:34:19] [DEBUG] Account balance fetch completed
+[2025-11-12 00:34:21] [INFO] Start agent button clicked
+[2025-11-12 00:34:21] [INFO] Starting CDEM agent...
+[2025-11-12 00:34:21] [SUCCESS] Agent started successfully
+[2025-11-12 00:34:49] [DEBUG] Starting account balance fetch
+[2025-11-12 00:34:49] [DEBUG] 📤 PAPER API Request: GET https://sandbox.tradier.com/v1/accounts/VA65164161/balances
+[2025-11-12 00:34:50] [DEBUG] 📥 PAPER API Response: Status 200
+[2025-11-12 00:34:50] [DEBUG] 📊 PAPER Raw Balances: {'option_short_value': 0, 'total_equity': 200000.0, 'account_number': 'VA65164161', 'account_type': 'margin', 'close_pl': 0, 'current_requirement': 0, 'equity': 0, 'long_market_value': 0, 'market_value': 0, 'open_pl': 0, 'option_long_value': 0, 'option_requirement': 0, 'pending_orders_count': 0, 'short_market_value': 0, 'stock_long_value': 0, 'total_cash': 200000.0, 'uncleared_funds': 0, 'pending_cash': 0, 'margin': {'fed_call': 0, 'maintenance_call': 0, 'option_buying_power': 200000.0, 'stock_buying_power': 400000.0, 'stock_short_value': 0, 'sweep': 0}}
+[2025-11-12 00:34:50] [INFO] 💰 PAPER: total_equity=$200,000.00, margin.stock_buying_power=$400,000.00
+[2025-11-12 00:34:50] [DEBUG] 📤 LIVE API Request: GET https://api.tradier.com/v1/accounts/6YB66013/balances
+[2025-11-12 00:34:50] [DEBUG] 📥 LIVE API Response: Status 200
+[2025-11-12 00:34:50] [DEBUG] 📊 LIVE Raw Balances: {'option_short_value': 0, 'total_equity': 0, 'account_number': '6YB66013', 'account_type': 'cash', 'close_pl': 0, 'current_requirement': 0, 'equity': 0, 'long_market_value': 0, 'market_value': 0, 'open_pl': 0, 'option_long_value': 0, 'option_requirement': 0, 'pending_orders_count': 0, 'short_market_value': 0, 'stock_long_value': 0, 'total_cash': 0, 'uncleared_funds': 0, 'pending_cash': 0, 'cash': {'cash_available': 0.0, 'sweep': 0, 'unsettled_funds': 0}}
+[2025-11-12 00:34:50] [INFO] 💰 LIVE: total_equity=$0.00, cash.cash_available=$0.00
+[2025-11-12 00:34:51] [DEBUG] Account balance fetch completed
+[2025-11-12 00:35:21] [DEBUG] Starting account balance fetch
+[2025-11-12 00:35:21] [DEBUG] 📤 PAPER API Request: GET https://sandbox.tradier.com/v1/accounts/VA65164161/balances
+[2025-11-12 00:35:21] [DEBUG] 📥 PAPER API Response: Status 200
+[2025-11-12 00:35:21] [DEBUG] 📊 PAPER Raw Balances: {'option_short_value': 0, 'total_equity': 200000.0, 'account_number': 'VA65164161', 'account_type': 'margin', 'close_pl': 0, 'current_requirement': 0, 'equity': 0, 'long_market_value': 0, 'market_value': 0, 'open_pl': 0, 'option_long_value': 0, 'option_requirement': 0, 'pending_orders_count': 0, 'short_market_value': 0, 'stock_long_value': 0, 'total_cash': 200000.0, 'uncleared_funds': 0, 'pending_cash': 0, 'margin': {'fed_call': 0, 'maintenance_call': 0, 'option_buying_power': 200000.0, 'stock_buying_power': 400000.0, 'stock_short_value': 0, 'sweep': 0}}
+[2025-11-12 00:35:21] [INFO] 💰 PAPER: total_equity=$200,000.00, margin.stock_buying_power=$400,000.00
+[2025-11-12 00:35:21] [DEBUG] 📤 LIVE API Request: GET https://api.tradier.com/v1/accounts/6YB66013/balances
+[2025-11-12 00:35:22] [DEBUG] 📥 LIVE API Response: Status 200
+[2025-11-12 00:35:22] [DEBUG] 📊 LIVE Raw Balances: {'option_short_value': 0, 'total_equity': 0, 'account_number': '6YB66013', 'account_type': 'cash', 'close_pl': 0, 'current_requirement': 0, 'equity': 0, 'long_market_value': 0, 'market_value': 0, 'open_pl': 0, 'option_long_value': 0, 'option_requirement': 0, 'pending_orders_count': 0, 'short_market_value': 0, 'stock_long_value': 0, 'total_cash': 0, 'uncleared_funds': 0, 'pending_cash': 0, 'cash': {'cash_available': 0.0, 'sweep': 0, 'unsettled_funds': 0}}
+[2025-11-12 00:35:22] [INFO] 💰 LIVE: total_equity=$0.00, cash.cash_available=$0.00
+[2025-11-12 00:35:22] [DEBUG] Account balance fetch completed
+[2025-11-12 00:35:52] [DEBUG] Starting account balance fetch
+[2025-11-12 00:35:52] [DEBUG] 📤 PAPER API Request: GET https://sandbox.tradier.com/v1/accounts/VA65164161/balances
+[2025-11-12 00:35:53] [DEBUG] 📥 PAPER API Response: Status 200
+[2025-11-12 00:35:53] [DEBUG] 📊 PAPER Raw Balances: {'option_short_value': 0, 'total_equity': 200000.0, 'account_number': 'VA65164161', 'account_type': 'margin', 'close_pl': 0, 'current_requirement': 0, 'equity': 0, 'long_market_value': 0, 'market_value': 0, 'open_pl': 0, 'option_long_value': 0, 'option_requirement': 0, 'pending_orders_count': 0, 'short_market_value': 0, 'stock_long_value': 0, 'total_cash': 200000.0, 'uncleared_funds': 0, 'pending_cash': 0, 'margin': {'fed_call': 0, 'maintenance_call': 0, 'option_buying_power': 200000.0, 'stock_buying_power': 400000.0, 'stock_short_value': 0, 'sweep': 0}}
+[2025-11-12 00:35:53] [INFO] 💰 PAPER: total_equity=$200,000.00, margin.stock_buying_power=$400,000.00
+[2025-11-12 00:35:53] [DEBUG] 📤 LIVE API Request: GET https://api.tradier.com/v1/accounts/6YB66013/balances
+[2025-11-12 00:35:54] [DEBUG] 📥 LIVE API Response: Status 200
+[2025-11-12 00:35:54] [DEBUG] 📊 LIVE Raw Balances: {'option_short_value': 0, 'total_equity': 0, 'account_number': '6YB66013', 'account_type': 'cash', 'close_pl': 0, 'current_requirement': 0, 'equity': 0, 'long_market_value': 0, 'market_value': 0, 'open_pl': 0, 'option_long_value': 0, 'option_requirement': 0, 'pending_orders_count': 0, 'short_market_value': 0, 'stock_long_value': 0, 'total_cash': 0, 'uncleared_funds': 0, 'pending_cash': 0, 'cash': {'cash_available': 0.0, 'sweep': 0, 'unsettled_funds': 0}}
+[2025-11-12 00:35:54] [INFO] 💰 LIVE: total_equity=$0.00, cash.cash_available=$0.00
+[2025-11-12 00:35:54] [DEBUG] Account balance fetch completed
+[2025-11-12 00:36:24] [DEBUG] Starting account balance fetch
+[2025-11-12 00:36:24] [DEBUG] 📤 PAPER API Request: GET https://sandbox.tradier.com/v1/accounts/VA65164161/balances
+[2025-11-12 00:36:24] [DEBUG] 📥 PAPER API Response: Status 200
+[2025-11-12 00:36:24] [DEBUG] 📊 PAPER Raw Balances: {'option_short_value': 0, 'total_equity': 200000.0, 'account_number': 'VA65164161', 'account_type': 'margin', 'close_pl': 0, 'current_requirement': 0, 'equity': 0, 'long_market_value': 0, 'market_value': 0, 'open_pl': 0, 'option_long_value': 0, 'option_requirement': 0, 'pending_orders_count': 0, 'short_market_value': 0, 'stock_long_value': 0, 'total_cash': 200000.0, 'uncleared_funds': 0, 'pending_cash': 0, 'margin': {'fed_call': 0, 'maintenance_call': 0, 'option_buying_power': 200000.0, 'stock_buying_power': 400000.0, 'stock_short_value': 0, 'sweep': 0}}
+[2025-11-12 00:36:24] [INFO] 💰 PAPER: total_equity=$200,000.00, margin.stock_buying_power=$400,000.00
+[2025-11-12 00:36:25] [DEBUG] 📤 LIVE API Request: GET https://api.tradier.com/v1/accounts/6YB66013/balances
+[2025-11-12 00:36:25] [DEBUG] 📥 LIVE API Response: Status 200
+[2025-11-12 00:36:25] [DEBUG] 📊 LIVE Raw Balances: {'option_short_value': 0, 'total_equity': 0, 'account_number': '6YB66013', 'account_type': 'cash', 'close_pl': 0, 'current_requirement': 0, 'equity': 0, 'long_market_value': 0, 'market_value': 0, 'open_pl': 0, 'option_long_value': 0, 'option_requirement': 0, 'pending_orders_count': 0, 'short_market_value': 0, 'stock_long_value': 0, 'total_cash': 0, 'uncleared_funds': 0, 'pending_cash': 0, 'cash': {'cash_available': 0.0, 'sweep': 0, 'unsettled_funds': 0}}
+[2025-11-12 00:36:25] [INFO] 💰 LIVE: total_equity=$0.00, cash.cash_available=$0.00
+[2025-11-12 00:36:26] [DEBUG] Account balance fetch completed
+[2025-11-12 00:36:56] [DEBUG] Starting account balance fetch
+[2025-11-12 00:36:56] [DEBUG] 📤 PAPER API Request: GET https://sandbox.tradier.com/v1/accounts/VA65164161/balances
+[2025-11-12 00:36:56] [DEBUG] 📥 PAPER API Response: Status 200
+[2025-11-12 00:36:56] [DEBUG] 📊 PAPER Raw Balances: {'option_short_value': 0, 'total_equity': 200000.0, 'account_number': 'VA65164161', 'account_type': 'margin', 'close_pl': 0, 'current_requirement': 0, 'equity': 0, 'long_market_value': 0, 'market_value': 0, 'open_pl': 0, 'option_long_value': 0, 'option_requirement': 0, 'pending_orders_count': 0, 'short_market_value': 0, 'stock_long_value': 0, 'total_cash': 200000.0, 'uncleared_funds': 0, 'pending_cash': 0, 'margin': {'fed_call': 0, 'maintenance_call': 0, 'option_buying_power': 200000.0, 'stock_buying_power': 400000.0, 'stock_short_value': 0, 'sweep': 0}}
+[2025-11-12 00:36:56] [INFO] 💰 PAPER: total_equity=$200,000.00, margin.stock_buying_power=$400,000.00
+[2025-11-12 00:36:56] [DEBUG] 📤 LIVE API Request: GET https://api.tradier.com/v1/accounts/6YB66013/balances
+[2025-11-12 00:36:57] [DEBUG] 📥 LIVE API Response: Status 200
+[2025-11-12 00:36:57] [DEBUG] 📊 LIVE Raw Balances: {'option_short_value': 0, 'total_equity': 0, 'account_number': '6YB66013', 'account_type': 'cash', 'close_pl': 0, 'current_requirement': 0, 'equity': 0, 'long_market_value': 0, 'market_value': 0, 'open_pl': 0, 'option_long_value': 0, 'option_requirement': 0, 'pending_orders_count': 0, 'short_market_value': 0, 'stock_long_value': 0, 'total_cash': 0, 'uncleared_funds': 0, 'pending_cash': 0, 'cash': {'cash_available': 0.0, 'sweep': 0, 'unsettled_funds': 0}}
+[2025-11-12 00:36:57] [INFO] 💰 LIVE: total_equity=$0.00, cash.cash_available=$0.00
+[2025-11-12 00:36:57] [DEBUG] Account balance fetch completed
+[2025-11-12 00:37:27] [DEBUG] Starting account balance fetch
+[2025-11-12 00:37:27] [DEBUG] 📤 PAPER API Request: GET https://sandbox.tradier.com/v1/accounts/VA65164161/balances
+[2025-11-12 00:37:28] [DEBUG] 📥 PAPER API Response: Status 200
+[2025-11-12 00:37:28] [DEBUG] 📊 PAPER Raw Balances: {'option_short_value': 0, 'total_equity': 200000.0, 'account_number': 'VA65164161', 'account_type': 'margin', 'close_pl': 0, 'current_requirement': 0, 'equity': 0, 'long_market_value': 0, 'market_value': 0, 'open_pl': 0, 'option_long_value': 0, 'option_requirement': 0, 'pending_orders_count': 0, 'short_market_value': 0, 'stock_long_value': 0, 'total_cash': 200000.0, 'uncleared_funds': 0, 'pending_cash': 0, 'margin': {'fed_call': 0, 'maintenance_call': 0, 'option_buying_power': 200000.0, 'stock_buying_power': 400000.0, 'stock_short_value': 0, 'sweep': 0}}
+[2025-11-12 00:37:28] [INFO] 💰 PAPER: total_equity=$200,000.00, margin.stock_buying_power=$400,000.00
+[2025-11-12 00:37:28] [DEBUG] 📤 LIVE API Request: GET https://api.tradier.com/v1/accounts/6YB66013/balances
+[2025-11-12 00:37:29] [DEBUG] 📥 LIVE API Response: Status 200
+[2025-11-12 00:37:29] [DEBUG] 📊 LIVE Raw Balances: {'option_short_value': 0, 'total_equity': 0, 'account_number': '6YB66013', 'account_type': 'cash', 'close_pl': 0, 'current_requirement': 0, 'equity': 0, 'long_market_value': 0, 'market_value': 0, 'open_pl': 0, 'option_long_value': 0, 'option_requirement': 0, 'pending_orders_count': 0, 'short_market_value': 0, 'stock_long_value': 0, 'total_cash': 0, 'uncleared_funds': 0, 'pending_cash': 0, 'cash': {'cash_available': 0.0, 'sweep': 0, 'unsettled_funds': 0}}
+[2025-11-12 00:37:29] [INFO] 💰 LIVE: total_equity=$0.00, cash.cash_available=$0.00
+[2025-11-12 00:37:29] [DEBUG] Account balance fetch completed
+[2025-11-12 00:37:59] [DEBUG] Starting account balance fetch
+[2025-11-12 00:37:59] [DEBUG] 📤 PAPER API Request: GET https://sandbox.tradier.com/v1/accounts/VA65164161/balances
+[2025-11-12 00:37:59] [DEBUG] 📥 PAPER API Response: Status 200
+[2025-11-12 00:37:59] [DEBUG] 📊 PAPER Raw Balances: {'option_short_value': 0, 'total_equity': 200000.0, 'account_number': 'VA65164161', 'account_type': 'margin', 'close_pl': 0, 'current_requirement': 0, 'equity': 0, 'long_market_value': 0, 'market_value': 0, 'open_pl': 0, 'option_long_value': 0, 'option_requirement': 0, 'pending_orders_count': 0, 'short_market_value': 0, 'stock_long_value': 0, 'total_cash': 200000.0, 'uncleared_funds': 0, 'pending_cash': 0, 'margin': {'fed_call': 0, 'maintenance_call': 0, 'option_buying_power': 200000.0, 'stock_buying_power': 400000.0, 'stock_short_value': 0, 'sweep': 0}}
+[2025-11-12 00:37:59] [INFO] 💰 PAPER: total_equity=$200,000.00, margin.stock_buying_power=$400,000.00
+[2025-11-12 00:38:00] [DEBUG] 📤 LIVE API Request: GET https://api.tradier.com/v1/accounts/6YB66013/balances
+[2025-11-12 00:38:00] [DEBUG] 📥 LIVE API Response: Status 200
+[2025-11-12 00:38:00] [DEBUG] 📊 LIVE Raw Balances: {'option_short_value': 0, 'total_equity': 0, 'account_number': '6YB66013', 'account_type': 'cash', 'close_pl': 0, 'current_requirement': 0, 'equity': 0, 'long_market_value': 0, 'market_value': 0, 'open_pl': 0, 'option_long_value': 0, 'option_requirement': 0, 'pending_orders_count': 0, 'short_market_value': 0, 'stock_long_value': 0, 'total_cash': 0, 'uncleared_funds': 0, 'pending_cash': 0, 'cash': {'cash_available': 0.0, 'sweep': 0, 'unsettled_funds': 0}}
+[2025-11-12 00:38:00] [INFO] 💰 LIVE: total_equity=$0.00, cash.cash_available=$0.00
+[2025-11-12 00:38:01] [DEBUG] Account balance fetch completed
+[2025-11-12 00:38:31] [DEBUG] Starting account balance fetch
+[2025-11-12 00:38:31] [DEBUG] 📤 PAPER API Request: GET https://sandbox.tradier.com/v1/accounts/VA65164161/balances
+[2025-11-12 00:38:31] [DEBUG] 📥 PAPER API Response: Status 200
+[2025-11-12 00:38:31] [DEBUG] 📊 PAPER Raw Balances: {'option_short_value': 0, 'total_equity': 200000.0, 'account_number': 'VA65164161', 'account_type': 'margin', 'close_pl': 0, 'current_requirement': 0, 'equity': 0, 'long_market_value': 0, 'market_value': 0, 'open_pl': 0, 'option_long_value': 0, 'option_requirement': 0, 'pending_orders_count': 0, 'short_market_value': 0, 'stock_long_value': 0, 'total_cash': 200000.0, 'uncleared_funds': 0, 'pending_cash': 0, 'margin': {'fed_call': 0, 'maintenance_call': 0, 'option_buying_power': 200000.0, 'stock_buying_power': 400000.0, 'stock_short_value': 0, 'sweep': 0}}
+[2025-11-12 00:38:31] [INFO] 💰 PAPER: total_equity=$200,000.00, margin.stock_buying_power=$400,000.00
+[2025-11-12 00:38:32] [DEBUG] 📤 LIVE API Request: GET https://api.tradier.com/v1/accounts/6YB66013/balances
+[2025-11-12 00:38:32] [DEBUG] 📥 LIVE API Response: Status 200
+[2025-11-12 00:38:32] [DEBUG] 📊 LIVE Raw Balances: {'option_short_value': 0, 'total_equity': 0, 'account_number': '6YB66013', 'account_type': 'cash', 'close_pl': 0, 'current_requirement': 0, 'equity': 0, 'long_market_value': 0, 'market_value': 0, 'open_pl': 0, 'option_long_value': 0, 'option_requirement': 0, 'pending_orders_count': 0, 'short_market_value': 0, 'stock_long_value': 0, 'total_cash': 0, 'uncleared_funds': 0, 'pending_cash': 0, 'cash': {'cash_available': 0.0, 'sweep': 0, 'unsettled_funds': 0}}
+[2025-11-12 00:38:32] [INFO] 💰 LIVE: total_equity=$0.00, cash.cash_available=$0.00
+[2025-11-12 00:38:33] [DEBUG] Account balance fetch completed
+[2025-11-12 00:39:03] [DEBUG] Starting account balance fetch
+[2025-11-12 00:39:03] [DEBUG] 📤 PAPER API Request: GET https://sandbox.tradier.com/v1/accounts/VA65164161/balances
+[2025-11-12 00:39:03] [DEBUG] 📥 PAPER API Response: Status 200
+[2025-11-12 00:39:03] [DEBUG] 📊 PAPER Raw Balances: {'option_short_value': 0, 'total_equity': 200000.0, 'account_number': 'VA65164161', 'account_type': 'margin', 'close_pl': 0, 'current_requirement': 0, 'equity': 0, 'long_market_value': 0, 'market_value': 0, 'open_pl': 0, 'option_long_value': 0, 'option_requirement': 0, 'pending_orders_count': 0, 'short_market_value': 0, 'stock_long_value': 0, 'total_cash': 200000.0, 'uncleared_funds': 0, 'pending_cash': 0, 'margin': {'fed_call': 0, 'maintenance_call': 0, 'option_buying_power': 200000.0, 'stock_buying_power': 400000.0, 'stock_short_value': 0, 'sweep': 0}}
+[2025-11-12 00:39:03] [INFO] 💰 PAPER: total_equity=$200,000.00, margin.stock_buying_power=$400,000.00
+[2025-11-12 00:39:04] [DEBUG] 📤 LIVE API Request: GET https://api.tradier.com/v1/accounts/6YB66013/balances
+[2025-11-12 00:39:04] [DEBUG] 📥 LIVE API Response: Status 200
+[2025-11-12 00:39:04] [DEBUG] 📊 LIVE Raw Balances: {'option_short_value': 0, 'total_equity': 0, 'account_number': '6YB66013', 'account_type': 'cash', 'close_pl': 0, 'current_requirement': 0, 'equity': 0, 'long_market_value': 0, 'market_value': 0, 'open_pl': 0, 'option_long_value': 0, 'option_requirement': 0, 'pending_orders_count': 0, 'short_market_value': 0, 'stock_long_value': 0, 'total_cash': 0, 'uncleared_funds': 0, 'pending_cash': 0, 'cash': {'cash_available': 0.0, 'sweep': 0, 'unsettled_funds': 0}}
+[2025-11-12 00:39:04] [INFO] 💰 LIVE: total_equity=$0.00, cash.cash_available=$0.00
+[2025-11-12 00:39:04] [DEBUG] Account balance fetch completed
+[2025-11-12 00:39:34] [DEBUG] Starting account balance fetch
+[2025-11-12 00:39:34] [DEBUG] 📤 PAPER API Request: GET https://sandbox.tradier.com/v1/accounts/VA65164161/balances
+[2025-11-12 00:39:35] [DEBUG] 📥 PAPER API Response: Status 200
+[2025-11-12 00:39:35] [DEBUG] 📊 PAPER Raw Balances: {'option_short_value': 0, 'total_equity': 200000.0, 'account_number': 'VA65164161', 'account_type': 'margin', 'close_pl': 0, 'current_requirement': 0, 'equity': 0, 'long_market_value': 0, 'market_value': 0, 'open_pl': 0, 'option_long_value': 0, 'option_requirement': 0, 'pending_orders_count': 0, 'short_market_value': 0, 'stock_long_value': 0, 'total_cash': 200000.0, 'uncleared_funds': 0, 'pending_cash': 0, 'margin': {'fed_call': 0, 'maintenance_call': 0, 'option_buying_power': 200000.0, 'stock_buying_power': 400000.0, 'stock_short_value': 0, 'sweep': 0}}
+[2025-11-12 00:39:35] [INFO] 💰 PAPER: total_equity=$200,000.00, margin.stock_buying_power=$400,000.00
+[2025-11-12 00:39:35] [DEBUG] 📤 LIVE API Request: GET https://api.tradier.com/v1/accounts/6YB66013/balances
+[2025-11-12 00:39:36] [DEBUG] 📥 LIVE API Response: Status 200
+[2025-11-12 00:39:36] [DEBUG] 📊 LIVE Raw Balances: {'option_short_value': 0, 'total_equity': 0, 'account_number': '6YB66013', 'account_type': 'cash', 'close_pl': 0, 'current_requirement': 0, 'equity': 0, 'long_market_value': 0, 'market_value': 0, 'open_pl': 0, 'option_long_value': 0, 'option_requirement': 0, 'pending_orders_count': 0, 'short_market_value': 0, 'stock_long_value': 0, 'total_cash': 0, 'uncleared_funds': 0, 'pending_cash': 0, 'cash': {'cash_available': 0.0, 'sweep': 0, 'unsettled_funds': 0}}
+[2025-11-12 00:39:36] [INFO] 💰 LIVE: total_equity=$0.00, cash.cash_available=$0.00
+[2025-11-12 00:39:36] [DEBUG] Account balance fetch completed
+[2025-11-12 00:40:06] [DEBUG] Starting account balance fetch
+[2025-11-12 00:40:06] [DEBUG] 📤 PAPER API Request: GET https://sandbox.tradier.com/v1/accounts/VA65164161/balances
+[2025-11-12 00:40:06] [DEBUG] 📥 PAPER API Response: Status 200
+[2025-11-12 00:40:06] [DEBUG] 📊 PAPER Raw Balances: {'option_short_value': 0, 'total_equity': 200000.0, 'account_number': 'VA65164161', 'account_type': 'margin', 'close_pl': 0, 'current_requirement': 0, 'equity': 0, 'long_market_value': 0, 'market_value': 0, 'open_pl': 0, 'option_long_value': 0, 'option_requirement': 0, 'pending_orders_count': 0, 'short_market_value': 0, 'stock_long_value': 0, 'total_cash': 200000.0, 'uncleared_funds': 0, 'pending_cash': 0, 'margin': {'fed_call': 0, 'maintenance_call': 0, 'option_buying_power': 200000.0, 'stock_buying_power': 400000.0, 'stock_short_value': 0, 'sweep': 0}}
+[2025-11-12 00:40:07] [INFO] 💰 PAPER: total_equity=$200,000.00, margin.stock_buying_power=$400,000.00
+[2025-11-12 00:40:07] [DEBUG] 📤 LIVE API Request: GET https://api.tradier.com/v1/accounts/6YB66013/balances
+[2025-11-12 00:40:07] [DEBUG] 📥 LIVE API Response: Status 200
+[2025-11-12 00:40:07] [DEBUG] 📊 LIVE Raw Balances: {'option_short_value': 0, 'total_equity': 0, 'account_number': '6YB66013', 'account_type': 'cash', 'close_pl': 0, 'current_requirement': 0, 'equity': 0, 'long_market_value': 0, 'market_value': 0, 'open_pl': 0, 'option_long_value': 0, 'option_requirement': 0, 'pending_orders_count': 0, 'short_market_value': 0, 'stock_long_value': 0, 'total_cash': 0, 'uncleared_funds': 0, 'pending_cash': 0, 'cash': {'cash_available': 0.0, 'sweep': 0, 'unsettled_funds': 0}}
+[2025-11-12 00:40:07] [INFO] 💰 LIVE: total_equity=$0.00, cash.cash_available=$0.00
+[2025-11-12 00:40:08] [DEBUG] Account balance fetch completed
+[2025-11-12 00:40:38] [DEBUG] Starting account balance fetch
+[2025-11-12 00:40:38] [DEBUG] 📤 PAPER API Request: GET https://sandbox.tradier.com/v1/accounts/VA65164161/balances
+[2025-11-12 00:40:38] [DEBUG] 📥 PAPER API Response: Status 200
+[2025-11-12 00:40:38] [DEBUG] 📊 PAPER Raw Balances: {'option_short_value': 0, 'total_equity': 200000.0, 'account_number': 'VA65164161', 'account_type': 'margin', 'close_pl': 0, 'current_requirement': 0, 'equity': 0, 'long_market_value': 0, 'market_value': 0, 'open_pl': 0, 'option_long_value': 0, 'option_requirement': 0, 'pending_orders_count': 0, 'short_market_value': 0, 'stock_long_value': 0, 'total_cash': 200000.0, 'uncleared_funds': 0, 'pending_cash': 0, 'margin': {'fed_call': 0, 'maintenance_call': 0, 'option_buying_power': 200000.0, 'stock_buying_power': 400000.0, 'stock_short_value': 0, 'sweep': 0}}
+[2025-11-12 00:40:38] [INFO] 💰 PAPER: total_equity=$200,000.00, margin.stock_buying_power=$400,000.00
+[2025-11-12 00:40:39] [DEBUG] 📤 LIVE API Request: GET https://api.tradier.com/v1/accounts/6YB66013/balances
+[2025-11-12 00:40:39] [DEBUG] 📥 LIVE API Response: Status 200
+[2025-11-12 00:40:39] [DEBUG] 📊 LIVE Raw Balances: {'option_short_value': 0, 'total_equity': 0, 'account_number': '6YB66013', 'account_type': 'cash', 'close_pl': 0, 'current_requirement': 0, 'equity': 0, 'long_market_value': 0, 'market_value': 0, 'open_pl': 0, 'option_long_value': 0, 'option_requirement': 0, 'pending_orders_count': 0, 'short_market_value': 0, 'stock_long_value': 0, 'total_cash': 0, 'uncleared_funds': 0, 'pending_cash': 0, 'cash': {'cash_available': 0.0, 'sweep': 0, 'unsettled_funds': 0}}
+[2025-11-12 00:40:39] [INFO] 💰 LIVE: total_equity=$0.00, cash.cash_available=$0.00
+[2025-11-12 00:40:40] [DEBUG] Account balance fetch completed
+[2025-11-12 00:41:10] [DEBUG] Starting account balance fetch
+[2025-11-12 00:41:10] [DEBUG] 📤 PAPER API Request: GET https://sandbox.tradier.com/v1/accounts/VA65164161/balances
+[2025-11-12 00:41:10] [DEBUG] 📥 PAPER API Response: Status 200
+[2025-11-12 00:41:10] [DEBUG] 📊 PAPER Raw Balances: {'option_short_value': 0, 'total_equity': 200000.0, 'account_number': 'VA65164161', 'account_type': 'margin', 'close_pl': 0, 'current_requirement': 0, 'equity': 0, 'long_market_value': 0, 'market_value': 0, 'open_pl': 0, 'option_long_value': 0, 'option_requirement': 0, 'pending_orders_count': 0, 'short_market_value': 0, 'stock_long_value': 0, 'total_cash': 200000.0, 'uncleared_funds': 0, 'pending_cash': 0, 'margin': {'fed_call': 0, 'maintenance_call': 0, 'option_buying_power': 200000.0, 'stock_buying_power': 400000.0, 'stock_short_value': 0, 'sweep': 0}}
+[2025-11-12 00:41:10] [INFO] 💰 PAPER: total_equity=$200,000.00, margin.stock_buying_power=$400,000.00
+[2025-11-12 00:41:10] [DEBUG] 📤 LIVE API Request: GET https://api.tradier.com/v1/accounts/6YB66013/balances
+[2025-11-12 00:41:11] [DEBUG] 📥 LIVE API Response: Status 200
+[2025-11-12 00:41:11] [DEBUG] 📊 LIVE Raw Balances: {'option_short_value': 0, 'total_equity': 0, 'account_number': '6YB66013', 'account_type': 'cash', 'close_pl': 0, 'current_requirement': 0, 'equity': 0, 'long_market_value': 0, 'market_value': 0, 'open_pl': 0, 'option_long_value': 0, 'option_requirement': 0, 'pending_orders_count': 0, 'short_market_value': 0, 'stock_long_value': 0, 'total_cash': 0, 'uncleared_funds': 0, 'pending_cash': 0, 'cash': {'cash_available': 0.0, 'sweep': 0, 'unsettled_funds': 0}}
+[2025-11-12 00:41:11] [INFO] 💰 LIVE: total_equity=$0.00, cash.cash_available=$0.00
+[2025-11-12 00:41:11] [DEBUG] Account balance fetch completed
+[2025-11-12 00:41:41] [DEBUG] Starting account balance fetch
+[2025-11-12 00:41:41] [DEBUG] 📤 PAPER API Request: GET https://sandbox.tradier.com/v1/accounts/VA65164161/balances
+[2025-11-12 00:41:42] [DEBUG] 📥 PAPER API Response: Status 200
+[2025-11-12 00:41:42] [DEBUG] 📊 PAPER Raw Balances: {'option_short_value': 0, 'total_equity': 200000.0, 'account_number': 'VA65164161', 'account_type': 'margin', 'close_pl': 0, 'current_requirement': 0, 'equity': 0, 'long_market_value': 0, 'market_value': 0, 'open_pl': 0, 'option_long_value': 0, 'option_requirement': 0, 'pending_orders_count': 0, 'short_market_value': 0, 'stock_long_value': 0, 'total_cash': 200000.0, 'uncleared_funds': 0, 'pending_cash': 0, 'margin': {'fed_call': 0, 'maintenance_call': 0, 'option_buying_power': 200000.0, 'stock_buying_power': 400000.0, 'stock_short_value': 0, 'sweep': 0}}
+[2025-11-12 00:41:42] [INFO] 💰 PAPER: total_equity=$200,000.00, margin.stock_buying_power=$400,000.00
+[2025-11-12 00:41:42] [DEBUG] 📤 LIVE API Request: GET https://api.tradier.com/v1/accounts/6YB66013/balances
+[2025-11-12 00:41:43] [DEBUG] 📥 LIVE API Response: Status 200
+[2025-11-12 00:41:43] [DEBUG] 📊 LIVE Raw Balances: {'option_short_value': 0, 'total_equity': 0, 'account_number': '6YB66013', 'account_type': 'cash', 'close_pl': 0, 'current_requirement': 0, 'equity': 0, 'long_market_value': 0, 'market_value': 0, 'open_pl': 0, 'option_long_value': 0, 'option_requirement': 0, 'pending_orders_count': 0, 'short_market_value': 0, 'stock_long_value': 0, 'total_cash': 0, 'uncleared_funds': 0, 'pending_cash': 0, 'cash': {'cash_available': 0.0, 'sweep': 0, 'unsettled_funds': 0}}
+[2025-11-12 00:41:43] [INFO] 💰 LIVE: total_equity=$0.00, cash.cash_available=$0.00
+[2025-11-12 00:41:43] [DEBUG] Account balance fetch completed
+[2025-11-12 00:42:13] [DEBUG] Starting account balance fetch
+[2025-11-12 00:42:13] [DEBUG] 📤 PAPER API Request: GET https://sandbox.tradier.com/v1/accounts/VA65164161/balances
+[2025-11-12 00:42:14] [DEBUG] 📥 PAPER API Response: Status 200
+[2025-11-12 00:42:14] [DEBUG] 📊 PAPER Raw Balances: {'option_short_value': 0, 'total_equity': 200000.0, 'account_number': 'VA65164161', 'account_type': 'margin', 'close_pl': 0, 'current_requirement': 0, 'equity': 0, 'long_market_value': 0, 'market_value': 0, 'open_pl': 0, 'option_long_value': 0, 'option_requirement': 0, 'pending_orders_count': 0, 'short_market_value': 0, 'stock_long_value': 0, 'total_cash': 200000.0, 'uncleared_funds': 0, 'pending_cash': 0, 'margin': {'fed_call': 0, 'maintenance_call': 0, 'option_buying_power': 200000.0, 'stock_buying_power': 400000.0, 'stock_short_value': 0, 'sweep': 0}}
+[2025-11-12 00:42:14] [INFO] 💰 PAPER: total_equity=$200,000.00, margin.stock_buying_power=$400,000.00
+[2025-11-12 00:42:14] [DEBUG] 📤 LIVE API Request: GET https://api.tradier.com/v1/accounts/6YB66013/balances
+[2025-11-12 00:42:15] [DEBUG] 📥 LIVE API Response: Status 200
+[2025-11-12 00:42:15] [DEBUG] 📊 LIVE Raw Balances: {'option_short_value': 0, 'total_equity': 0, 'account_number': '6YB66013', 'account_type': 'cash', 'close_pl': 0, 'current_requirement': 0, 'equity': 0, 'long_market_value': 0, 'market_value': 0, 'open_pl': 0, 'option_long_value': 0, 'option_requirement': 0, 'pending_orders_count': 0, 'short_market_value': 0, 'stock_long_value': 0, 'total_cash': 0, 'uncleared_funds': 0, 'pending_cash': 0, 'cash': {'cash_available': 0.0, 'sweep': 0, 'unsettled_funds': 0}}
+[2025-11-12 00:42:15] [INFO] 💰 LIVE: total_equity=$0.00, cash.cash_available=$0.00
+[2025-11-12 00:42:15] [DEBUG] Account balance fetch completed
+[2025-11-12 00:42:45] [DEBUG] Starting account balance fetch
+[2025-11-12 00:42:45] [DEBUG] 📤 PAPER API Request: GET https://sandbox.tradier.com/v1/accounts/VA65164161/balances
+[2025-11-12 00:42:45] [DEBUG] 📥 PAPER API Response: Status 200
+[2025-11-12 00:42:45] [DEBUG] 📊 PAPER Raw Balances: {'option_short_value': 0, 'total_equity': 200000.0, 'account_number': 'VA65164161', 'account_type': 'margin', 'close_pl': 0, 'current_requirement': 0, 'equity': 0, 'long_market_value': 0, 'market_value': 0, 'open_pl': 0, 'option_long_value': 0, 'option_requirement': 0, 'pending_orders_count': 0, 'short_market_value': 0, 'stock_long_value': 0, 'total_cash': 200000.0, 'uncleared_funds': 0, 'pending_cash': 0, 'margin': {'fed_call': 0, 'maintenance_call': 0, 'option_buying_power': 200000.0, 'stock_buying_power': 400000.0, 'stock_short_value': 0, 'sweep': 0}}
+[2025-11-12 00:42:45] [INFO] 💰 PAPER: total_equity=$200,000.00, margin.stock_buying_power=$400,000.00
+[2025-11-12 00:42:46] [DEBUG] 📤 LIVE API Request: GET https://api.tradier.com/v1/accounts/6YB66013/balances
+[2025-11-12 00:42:46] [DEBUG] 📥 LIVE API Response: Status 200
+[2025-11-12 00:42:46] [DEBUG] 📊 LIVE Raw Balances: {'option_short_value': 0, 'total_equity': 0, 'account_number': '6YB66013', 'account_type': 'cash', 'close_pl': 0, 'current_requirement': 0, 'equity': 0, 'long_market_value': 0, 'market_value': 0, 'open_pl': 0, 'option_long_value': 0, 'option_requirement': 0, 'pending_orders_count': 0, 'short_market_value': 0, 'stock_long_value': 0, 'total_cash': 0, 'uncleared_funds': 0, 'pending_cash': 0, 'cash': {'cash_available': 0.0, 'sweep': 0, 'unsettled_funds': 0}}
+[2025-11-12 00:42:46] [INFO] 💰 LIVE: total_equity=$0.00, cash.cash_available=$0.00
+[2025-11-12 00:42:46] [DEBUG] Account balance fetch completed
+[2025-11-12 00:43:16] [DEBUG] Starting account balance fetch
+[2025-11-12 00:43:16] [DEBUG] 📤 PAPER API Request: GET https://sandbox.tradier.com/v1/accounts/VA65164161/balances
+[2025-11-12 00:43:17] [DEBUG] 📥 PAPER API Response: Status 200
+[2025-11-12 00:43:17] [DEBUG] 📊 PAPER Raw Balances: {'option_short_value': 0, 'total_equity': 200000.0, 'account_number': 'VA65164161', 'account_type': 'margin', 'close_pl': 0, 'current_requirement': 0, 'equity': 0, 'long_market_value': 0, 'market_value': 0, 'open_pl': 0, 'option_long_value': 0, 'option_requirement': 0, 'pending_orders_count': 0, 'short_market_value': 0, 'stock_long_value': 0, 'total_cash': 200000.0, 'uncleared_funds': 0, 'pending_cash': 0, 'margin': {'fed_call': 0, 'maintenance_call': 0, 'option_buying_power': 200000.0, 'stock_buying_power': 400000.0, 'stock_short_value': 0, 'sweep': 0}}
+[2025-11-12 00:43:17] [INFO] 💰 PAPER: total_equity=$200,000.00, margin.stock_buying_power=$400,000.00
+[2025-11-12 00:43:17] [DEBUG] 📤 LIVE API Request: GET https://api.tradier.com/v1/accounts/6YB66013/balances
+[2025-11-12 00:43:18] [DEBUG] 📥 LIVE API Response: Status 200
+[2025-11-12 00:43:18] [DEBUG] 📊 LIVE Raw Balances: {'option_short_value': 0, 'total_equity': 0, 'account_number': '6YB66013', 'account_type': 'cash', 'close_pl': 0, 'current_requirement': 0, 'equity': 0, 'long_market_value': 0, 'market_value': 0, 'open_pl': 0, 'option_long_value': 0, 'option_requirement': 0, 'pending_orders_count': 0, 'short_market_value': 0, 'stock_long_value': 0, 'total_cash': 0, 'uncleared_funds': 0, 'pending_cash': 0, 'cash': {'cash_available': 0.0, 'sweep': 0, 'unsettled_funds': 0}}
+[2025-11-12 00:43:18] [INFO] 💰 LIVE: total_equity=$0.00, cash.cash_available=$0.00
+[2025-11-12 00:43:18] [DEBUG] Account balance fetch completed
+[2025-11-12 00:43:48] [DEBUG] Starting account balance fetch
+[2025-11-12 00:43:48] [DEBUG] 📤 PAPER API Request: GET https://sandbox.tradier.com/v1/accounts/VA65164161/balances
+[2025-11-12 00:43:49] [DEBUG] 📥 PAPER API Response: Status 200
+[2025-11-12 00:43:49] [DEBUG] 📊 PAPER Raw Balances: {'option_short_value': 0, 'total_equity': 200000.0, 'account_number': 'VA65164161', 'account_type': 'margin', 'close_pl': 0, 'current_requirement': 0, 'equity': 0, 'long_market_value': 0, 'market_value': 0, 'open_pl': 0, 'option_long_value': 0, 'option_requirement': 0, 'pending_orders_count': 0, 'short_market_value': 0, 'stock_long_value': 0, 'total_cash': 200000.0, 'uncleared_funds': 0, 'pending_cash': 0, 'margin': {'fed_call': 0, 'maintenance_call': 0, 'option_buying_power': 200000.0, 'stock_buying_power': 400000.0, 'stock_short_value': 0, 'sweep': 0}}
+[2025-11-12 00:43:49] [INFO] 💰 PAPER: total_equity=$200,000.00, margin.stock_buying_power=$400,000.00
+[2025-11-12 00:43:49] [DEBUG] 📤 LIVE API Request: GET https://api.tradier.com/v1/accounts/6YB66013/balances
+[2025-11-12 00:43:50] [DEBUG] 📥 LIVE API Response: Status 200
+[2025-11-12 00:43:50] [DEBUG] 📊 LIVE Raw Balances: {'option_short_value': 0, 'total_equity': 0, 'account_number': '6YB66013', 'account_type': 'cash', 'close_pl': 0, 'current_requirement': 0, 'equity': 0, 'long_market_value': 0, 'market_value': 0, 'open_pl': 0, 'option_long_value': 0, 'option_requirement': 0, 'pending_orders_count': 0, 'short_market_value': 0, 'stock_long_value': 0, 'total_cash': 0, 'uncleared_funds': 0, 'pending_cash': 0, 'cash': {'cash_available': 0.0, 'sweep': 0, 'unsettled_funds': 0}}
+[2025-11-12 00:43:50] [INFO] 💰 LIVE: total_equity=$0.00, cash.cash_available=$0.00
+[2025-11-12 00:43:50] [DEBUG] Account balance fetch completed
+[2025-11-12 00:44:20] [DEBUG] Starting account balance fetch
+[2025-11-12 00:44:20] [DEBUG] 📤 PAPER API Request: GET https://sandbox.tradier.com/v1/accounts/VA65164161/balances
+[2025-11-12 00:44:20] [DEBUG] 📥 PAPER API Response: Status 200
+[2025-11-12 00:44:20] [DEBUG] 📊 PAPER Raw Balances: {'option_short_value': 0, 'total_equity': 200000.0, 'account_number': 'VA65164161', 'account_type': 'margin', 'close_pl': 0, 'current_requirement': 0, 'equity': 0, 'long_market_value': 0, 'market_value': 0, 'open_pl': 0, 'option_long_value': 0, 'option_requirement': 0, 'pending_orders_count': 0, 'short_market_value': 0, 'stock_long_value': 0, 'total_cash': 200000.0, 'uncleared_funds': 0, 'pending_cash': 0, 'margin': {'fed_call': 0, 'maintenance_call': 0, 'option_buying_power': 200000.0, 'stock_buying_power': 400000.0, 'stock_short_value': 0, 'sweep': 0}}
+[2025-11-12 00:44:20] [INFO] 💰 PAPER: total_equity=$200,000.00, margin.stock_buying_power=$400,000.00
+[2025-11-12 00:44:21] [DEBUG] 📤 LIVE API Request: GET https://api.tradier.com/v1/accounts/6YB66013/balances
+[2025-11-12 00:44:21] [DEBUG] 📥 LIVE API Response: Status 200
+[2025-11-12 00:44:21] [DEBUG] 📊 LIVE Raw Balances: {'option_short_value': 0, 'total_equity': 0, 'account_number': '6YB66013', 'account_type': 'cash', 'close_pl': 0, 'current_requirement': 0, 'equity': 0, 'long_market_value': 0, 'market_value': 0, 'open_pl': 0, 'option_long_value': 0, 'option_requirement': 0, 'pending_orders_count': 0, 'short_market_value': 0, 'stock_long_value': 0, 'total_cash': 0, 'uncleared_funds': 0, 'pending_cash': 0, 'cash': {'cash_available': 0.0, 'sweep': 0, 'unsettled_funds': 0}}
+[2025-11-12 00:44:21] [INFO] 💰 LIVE: total_equity=$0.00, cash.cash_available=$0.00
+[2025-11-12 00:44:22] [DEBUG] Account balance fetch completed
+[2025-11-12 00:44:52] [DEBUG] Starting account balance fetch
+[2025-11-12 00:44:52] [DEBUG] 📤 PAPER API Request: GET https://sandbox.tradier.com/v1/accounts/VA65164161/balances
+[2025-11-12 00:44:52] [DEBUG] 📥 PAPER API Response: Status 200
+[2025-11-12 00:44:52] [DEBUG] 📊 PAPER Raw Balances: {'option_short_value': 0, 'total_equity': 200000.0, 'account_number': 'VA65164161', 'account_type': 'margin', 'close_pl': 0, 'current_requirement': 0, 'equity': 0, 'long_market_value': 0, 'market_value': 0, 'open_pl': 0, 'option_long_value': 0, 'option_requirement': 0, 'pending_orders_count': 0, 'short_market_value': 0, 'stock_long_value': 0, 'total_cash': 200000.0, 'uncleared_funds': 0, 'pending_cash': 0, 'margin': {'fed_call': 0, 'maintenance_call': 0, 'option_buying_power': 200000.0, 'stock_buying_power': 400000.0, 'stock_short_value': 0, 'sweep': 0}}
+[2025-11-12 00:44:52] [INFO] 💰 PAPER: total_equity=$200,000.00, margin.stock_buying_power=$400,000.00
+[2025-11-12 00:44:52] [DEBUG] 📤 LIVE API Request: GET https://api.tradier.com/v1/accounts/6YB66013/balances
+[2025-11-12 00:44:53] [DEBUG] 📥 LIVE API Response: Status 200
+[2025-11-12 00:44:53] [DEBUG] 📊 LIVE Raw Balances: {'option_short_value': 0, 'total_equity': 0, 'account_number': '6YB66013', 'account_type': 'cash', 'close_pl': 0, 'current_requirement': 0, 'equity': 0, 'long_market_value': 0, 'market_value': 0, 'open_pl': 0, 'option_long_value': 0, 'option_requirement': 0, 'pending_orders_count': 0, 'short_market_value': 0, 'stock_long_value': 0, 'total_cash': 0, 'uncleared_funds': 0, 'pending_cash': 0, 'cash': {'cash_available': 0.0, 'sweep': 0, 'unsettled_funds': 0}}
+[2025-11-12 00:44:53] [INFO] 💰 LIVE: total_equity=$0.00, cash.cash_available=$0.00
+[2025-11-12 00:44:53] [DEBUG] Account balance fetch completed
+[2025-11-12 00:45:23] [DEBUG] Starting account balance fetch
+[2025-11-12 00:45:23] [DEBUG] 📤 PAPER API Request: GET https://sandbox.tradier.com/v1/accounts/VA65164161/balances
+[2025-11-12 00:45:24] [DEBUG] 📥 PAPER API Response: Status 200
+[2025-11-12 00:45:24] [DEBUG] 📊 PAPER Raw Balances: {'option_short_value': 0, 'total_equity': 200000.0, 'account_number': 'VA65164161', 'account_type': 'margin', 'close_pl': 0, 'current_requirement': 0, 'equity': 0, 'long_market_value': 0, 'market_value': 0, 'open_pl': 0, 'option_long_value': 0, 'option_requirement': 0, 'pending_orders_count': 0, 'short_market_value': 0, 'stock_long_value': 0, 'total_cash': 200000.0, 'uncleared_funds': 0, 'pending_cash': 0, 'margin': {'fed_call': 0, 'maintenance_call': 0, 'option_buying_power': 200000.0, 'stock_buying_power': 400000.0, 'stock_short_value': 0, 'sweep': 0}}
+[2025-11-12 00:45:24] [INFO] 💰 PAPER: total_equity=$200,000.00, margin.stock_buying_power=$400,000.00
+[2025-11-12 00:45:24] [DEBUG] 📤 LIVE API Request: GET https://api.tradier.com/v1/accounts/6YB66013/balances
+[2025-11-12 00:45:25] [DEBUG] 📥 LIVE API Response: Status 200
+[2025-11-12 00:45:25] [DEBUG] 📊 LIVE Raw Balances: {'option_short_value': 0, 'total_equity': 0, 'account_number': '6YB66013', 'account_type': 'cash', 'close_pl': 0, 'current_requirement': 0, 'equity': 0, 'long_market_value': 0, 'market_value': 0, 'open_pl': 0, 'option_long_value': 0, 'option_requirement': 0, 'pending_orders_count': 0, 'short_market_value': 0, 'stock_long_value': 0, 'total_cash': 0, 'uncleared_funds': 0, 'pending_cash': 0, 'cash': {'cash_available': 0.0, 'sweep': 0, 'unsettled_funds': 0}}
+[2025-11-12 00:45:25] [INFO] 💰 LIVE: total_equity=$0.00, cash.cash_available=$0.00
+[2025-11-12 00:45:25] [DEBUG] Account balance fetch completed
+[2025-11-12 00:45:55] [DEBUG] Starting account balance fetch
+[2025-11-12 00:45:55] [DEBUG] 📤 PAPER API Request: GET https://sandbox.tradier.com/v1/accounts/VA65164161/balances
+[2025-11-12 00:45:56] [DEBUG] 📥 PAPER API Response: Status 200
+[2025-11-12 00:45:56] [DEBUG] 📊 PAPER Raw Balances: {'option_short_value': 0, 'total_equity': 200000.0, 'account_number': 'VA65164161', 'account_type': 'margin', 'close_pl': 0, 'current_requirement': 0, 'equity': 0, 'long_market_value': 0, 'market_value': 0, 'open_pl': 0, 'option_long_value': 0, 'option_requirement': 0, 'pending_orders_count': 0, 'short_market_value': 0, 'stock_long_value': 0, 'total_cash': 200000.0, 'uncleared_funds': 0, 'pending_cash': 0, 'margin': {'fed_call': 0, 'maintenance_call': 0, 'option_buying_power': 200000.0, 'stock_buying_power': 400000.0, 'stock_short_value': 0, 'sweep': 0}}
+[2025-11-12 00:45:56] [INFO] 💰 PAPER: total_equity=$200,000.00, margin.stock_buying_power=$400,000.00
+[2025-11-12 00:45:56] [DEBUG] 📤 LIVE API Request: GET https://api.tradier.com/v1/accounts/6YB66013/balances
+[2025-11-12 00:45:57] [DEBUG] 📥 LIVE API Response: Status 200
+[2025-11-12 00:45:57] [DEBUG] 📊 LIVE Raw Balances: {'option_short_value': 0, 'total_equity': 0, 'account_number': '6YB66013', 'account_type': 'cash', 'close_pl': 0, 'current_requirement': 0, 'equity': 0, 'long_market_value': 0, 'market_value': 0, 'open_pl': 0, 'option_long_value': 0, 'option_requirement': 0, 'pending_orders_count': 0, 'short_market_value': 0, 'stock_long_value': 0, 'total_cash': 0, 'uncleared_funds': 0, 'pending_cash': 0, 'cash': {'cash_available': 0.0, 'sweep': 0, 'unsettled_funds': 0}}
+[2025-11-12 00:45:57] [INFO] 💰 LIVE: total_equity=$0.00, cash.cash_available=$0.00
+[2025-11-12 00:45:57] [DEBUG] Account balance fetch completed
+[2025-11-12 00:46:27] [DEBUG] Starting account balance fetch
+[2025-11-12 00:46:27] [DEBUG] 📤 PAPER API Request: GET https://sandbox.tradier.com/v1/accounts/VA65164161/balances
+[2025-11-12 00:46:27] [DEBUG] 📥 PAPER API Response: Status 200
+[2025-11-12 00:46:27] [DEBUG] 📊 PAPER Raw Balances: {'option_short_value': 0, 'total_equity': 200000.0, 'account_number': 'VA65164161', 'account_type': 'margin', 'close_pl': 0, 'current_requirement': 0, 'equity': 0, 'long_market_value': 0, 'market_value': 0, 'open_pl': 0, 'option_long_value': 0, 'option_requirement': 0, 'pending_orders_count': 0, 'short_market_value': 0, 'stock_long_value': 0, 'total_cash': 200000.0, 'uncleared_funds': 0, 'pending_cash': 0, 'margin': {'fed_call': 0, 'maintenance_call': 0, 'option_buying_power': 200000.0, 'stock_buying_power': 400000.0, 'stock_short_value': 0, 'sweep': 0}}
+[2025-11-12 00:46:27] [INFO] 💰 PAPER: total_equity=$200,000.00, margin.stock_buying_power=$400,000.00
+[2025-11-12 00:46:28] [DEBUG] 📤 LIVE API Request: GET https://api.tradier.com/v1/accounts/6YB66013/balances
+[2025-11-12 00:46:28] [DEBUG] 📥 LIVE API Response: Status 200
+[2025-11-12 00:46:28] [DEBUG] 📊 LIVE Raw Balances: {'option_short_value': 0, 'total_equity': 0, 'account_number': '6YB66013', 'account_type': 'cash', 'close_pl': 0, 'current_requirement': 0, 'equity': 0, 'long_market_value': 0, 'market_value': 0, 'open_pl': 0, 'option_long_value': 0, 'option_requirement': 0, 'pending_orders_count': 0, 'short_market_value': 0, 'stock_long_value': 0, 'total_cash': 0, 'uncleared_funds': 0, 'pending_cash': 0, 'cash': {'cash_available': 0.0, 'sweep': 0, 'unsettled_funds': 0}}
+[2025-11-12 00:46:28] [INFO] 💰 LIVE: total_equity=$0.00, cash.cash_available=$0.00
+[2025-11-12 00:46:29] [DEBUG] Account balance fetch completed
+[2025-11-12 00:46:59] [DEBUG] Starting account balance fetch
+[2025-11-12 00:46:59] [DEBUG] 📤 PAPER API Request: GET https://sandbox.tradier.com/v1/accounts/VA65164161/balances
+[2025-11-12 00:46:59] [DEBUG] 📥 PAPER API Response: Status 200
+[2025-11-12 00:46:59] [DEBUG] 📊 PAPER Raw Balances: {'option_short_value': 0, 'total_equity': 200000.0, 'account_number': 'VA65164161', 'account_type': 'margin', 'close_pl': 0, 'current_requirement': 0, 'equity': 0, 'long_market_value': 0, 'market_value': 0, 'open_pl': 0, 'option_long_value': 0, 'option_requirement': 0, 'pending_orders_count': 0, 'short_market_value': 0, 'stock_long_value': 0, 'total_cash': 200000.0, 'uncleared_funds': 0, 'pending_cash': 0, 'margin': {'fed_call': 0, 'maintenance_call': 0, 'option_buying_power': 200000.0, 'stock_buying_power': 400000.0, 'stock_short_value': 0, 'sweep': 0}}
+[2025-11-12 00:46:59] [INFO] 💰 PAPER: total_equity=$200,000.00, margin.stock_buying_power=$400,000.00
+[2025-11-12 00:46:59] [DEBUG] 📤 LIVE API Request: GET https://api.tradier.com/v1/accounts/6YB66013/balances
+[2025-11-12 00:47:00] [DEBUG] 📥 LIVE API Response: Status 200
+[2025-11-12 00:47:00] [DEBUG] 📊 LIVE Raw Balances: {'option_short_value': 0, 'total_equity': 0, 'account_number': '6YB66013', 'account_type': 'cash', 'close_pl': 0, 'current_requirement': 0, 'equity': 0, 'long_market_value': 0, 'market_value': 0, 'open_pl': 0, 'option_long_value': 0, 'option_requirement': 0, 'pending_orders_count': 0, 'short_market_value': 0, 'stock_long_value': 0, 'total_cash': 0, 'uncleared_funds': 0, 'pending_cash': 0, 'cash': {'cash_available': 0.0, 'sweep': 0, 'unsettled_funds': 0}}
+[2025-11-12 00:47:00] [INFO] 💰 LIVE: total_equity=$0.00, cash.cash_available=$0.00
+[2025-11-12 00:47:00] [DEBUG] Account balance fetch completed
+[2025-11-12 00:47:30] [DEBUG] Starting account balance fetch
+[2025-11-12 00:47:30] [DEBUG] 📤 PAPER API Request: GET https://sandbox.tradier.com/v1/accounts/VA65164161/balances
+[2025-11-12 00:47:31] [DEBUG] 📥 PAPER API Response: Status 200
+[2025-11-12 00:47:31] [DEBUG] 📊 PAPER Raw Balances: {'option_short_value': 0, 'total_equity': 200000.0, 'account_number': 'VA65164161', 'account_type': 'margin', 'close_pl': 0, 'current_requirement': 0, 'equity': 0, 'long_market_value': 0, 'market_value': 0, 'open_pl': 0, 'option_long_value': 0, 'option_requirement': 0, 'pending_orders_count': 0, 'short_market_value': 0, 'stock_long_value': 0, 'total_cash': 200000.0, 'uncleared_funds': 0, 'pending_cash': 0, 'margin': {'fed_call': 0, 'maintenance_call': 0, 'option_buying_power': 200000.0, 'stock_buying_power': 400000.0, 'stock_short_value': 0, 'sweep': 0}}
+[2025-11-12 00:47:31] [INFO] 💰 PAPER: total_equity=$200,000.00, margin.stock_buying_power=$400,000.00
+[2025-11-12 00:47:31] [DEBUG] 📤 LIVE API Request: GET https://api.tradier.com/v1/accounts/6YB66013/balances
+[2025-11-12 00:47:31] [DEBUG] 📥 LIVE API Response: Status 200
+[2025-11-12 00:47:31] [DEBUG] 📊 LIVE Raw Balances: {'option_short_value': 0, 'total_equity': 0, 'account_number': '6YB66013', 'account_type': 'cash', 'close_pl': 0, 'current_requirement': 0, 'equity': 0, 'long_market_value': 0, 'market_value': 0, 'open_pl': 0, 'option_long_value': 0, 'option_requirement': 0, 'pending_orders_count': 0, 'short_market_value': 0, 'stock_long_value': 0, 'total_cash': 0, 'uncleared_funds': 0, 'pending_cash': 0, 'cash': {'cash_available': 0.0, 'sweep': 0, 'unsettled_funds': 0}}
+[2025-11-12 00:47:31] [INFO] 💰 LIVE: total_equity=$0.00, cash.cash_available=$0.00
+[2025-11-12 00:47:32] [DEBUG] Account balance fetch completed
+[2025-11-12 00:48:02] [DEBUG] Starting account balance fetch
+[2025-11-12 00:48:02] [DEBUG] 📤 PAPER API Request: GET https://sandbox.tradier.com/v1/accounts/VA65164161/balances
+[2025-11-12 00:48:02] [DEBUG] 📥 PAPER API Response: Status 200
+[2025-11-12 00:48:02] [DEBUG] 📊 PAPER Raw Balances: {'option_short_value': 0, 'total_equity': 200000.0, 'account_number': 'VA65164161', 'account_type': 'margin', 'close_pl': 0, 'current_requirement': 0, 'equity': 0, 'long_market_value': 0, 'market_value': 0, 'open_pl': 0, 'option_long_value': 0, 'option_requirement': 0, 'pending_orders_count': 0, 'short_market_value': 0, 'stock_long_value': 0, 'total_cash': 200000.0, 'uncleared_funds': 0, 'pending_cash': 0, 'margin': {'fed_call': 0, 'maintenance_call': 0, 'option_buying_power': 200000.0, 'stock_buying_power': 400000.0, 'stock_short_value': 0, 'sweep': 0}}
+[2025-11-12 00:48:02] [INFO] 💰 PAPER: total_equity=$200,000.00, margin.stock_buying_power=$400,000.00
+[2025-11-12 00:48:03] [DEBUG] 📤 LIVE API Request: GET https://api.tradier.com/v1/accounts/6YB66013/balances
+[2025-11-12 00:48:03] [DEBUG] 📥 LIVE API Response: Status 200
+[2025-11-12 00:48:03] [DEBUG] 📊 LIVE Raw Balances: {'option_short_value': 0, 'total_equity': 0, 'account_number': '6YB66013', 'account_type': 'cash', 'close_pl': 0, 'current_requirement': 0, 'equity': 0, 'long_market_value': 0, 'market_value': 0, 'open_pl': 0, 'option_long_value': 0, 'option_requirement': 0, 'pending_orders_count': 0, 'short_market_value': 0, 'stock_long_value': 0, 'total_cash': 0, 'uncleared_funds': 0, 'pending_cash': 0, 'cash': {'cash_available': 0.0, 'sweep': 0, 'unsettled_funds': 0}}
+[2025-11-12 00:48:03] [INFO] 💰 LIVE: total_equity=$0.00, cash.cash_available=$0.00
+[2025-11-12 00:48:03] [DEBUG] Account balance fetch completed
+[2025-11-12 00:48:33] [DEBUG] Starting account balance fetch
+[2025-11-12 00:48:33] [DEBUG] 📤 PAPER API Request: GET https://sandbox.tradier.com/v1/accounts/VA65164161/balances
+[2025-11-12 00:48:34] [DEBUG] 📥 PAPER API Response: Status 200
+[2025-11-12 00:48:34] [DEBUG] 📊 PAPER Raw Balances: {'option_short_value': 0, 'total_equity': 200000.0, 'account_number': 'VA65164161', 'account_type': 'margin', 'close_pl': 0, 'current_requirement': 0, 'equity': 0, 'long_market_value': 0, 'market_value': 0, 'open_pl': 0, 'option_long_value': 0, 'option_requirement': 0, 'pending_orders_count': 0, 'short_market_value': 0, 'stock_long_value': 0, 'total_cash': 200000.0, 'uncleared_funds': 0, 'pending_cash': 0, 'margin': {'fed_call': 0, 'maintenance_call': 0, 'option_buying_power': 200000.0, 'stock_buying_power': 400000.0, 'stock_short_value': 0, 'sweep': 0}}
+[2025-11-12 00:48:34] [INFO] 💰 PAPER: total_equity=$200,000.00, margin.stock_buying_power=$400,000.00
+[2025-11-12 00:48:34] [DEBUG] 📤 LIVE API Request: GET https://api.tradier.com/v1/accounts/6YB66013/balances
+[2025-11-12 00:48:35] [DEBUG] 📥 LIVE API Response: Status 200
+[2025-11-12 00:48:35] [DEBUG] 📊 LIVE Raw Balances: {'option_short_value': 0, 'total_equity': 0, 'account_number': '6YB66013', 'account_type': 'cash', 'close_pl': 0, 'current_requirement': 0, 'equity': 0, 'long_market_value': 0, 'market_value': 0, 'open_pl': 0, 'option_long_value': 0, 'option_requirement': 0, 'pending_orders_count': 0, 'short_market_value': 0, 'stock_long_value': 0, 'total_cash': 0, 'uncleared_funds': 0, 'pending_cash': 0, 'cash': {'cash_available': 0.0, 'sweep': 0, 'unsettled_funds': 0}}
+[2025-11-12 00:48:35] [INFO] 💰 LIVE: total_equity=$0.00, cash.cash_available=$0.00
+[2025-11-12 00:48:35] [DEBUG] Account balance fetch completed
+[2025-11-12 00:49:05] [DEBUG] Starting account balance fetch
+[2025-11-12 00:49:05] [DEBUG] 📤 PAPER API Request: GET https://sandbox.tradier.com/v1/accounts/VA65164161/balances
+[2025-11-12 00:49:05] [DEBUG] 📥 PAPER API Response: Status 200
+[2025-11-12 00:49:05] [DEBUG] 📊 PAPER Raw Balances: {'option_short_value': 0, 'total_equity': 200000.0, 'account_number': 'VA65164161', 'account_type': 'margin', 'close_pl': 0, 'current_requirement': 0, 'equity': 0, 'long_market_value': 0, 'market_value': 0, 'open_pl': 0, 'option_long_value': 0, 'option_requirement': 0, 'pending_orders_count': 0, 'short_market_value': 0, 'stock_long_value': 0, 'total_cash': 200000.0, 'uncleared_funds': 0, 'pending_cash': 0, 'margin': {'fed_call': 0, 'maintenance_call': 0, 'option_buying_power': 200000.0, 'stock_buying_power': 400000.0, 'stock_short_value': 0, 'sweep': 0}}
+[2025-11-12 00:49:05] [INFO] 💰 PAPER: total_equity=$200,000.00, margin.stock_buying_power=$400,000.00
+[2025-11-12 00:49:06] [DEBUG] 📤 LIVE API Request: GET https://api.tradier.com/v1/accounts/6YB66013/balances
+[2025-11-12 00:49:06] [DEBUG] 📥 LIVE API Response: Status 200
+[2025-11-12 00:49:06] [DEBUG] 📊 LIVE Raw Balances: {'option_short_value': 0, 'total_equity': 0, 'account_number': '6YB66013', 'account_type': 'cash', 'close_pl': 0, 'current_requirement': 0, 'equity': 0, 'long_market_value': 0, 'market_value': 0, 'open_pl': 0, 'option_long_value': 0, 'option_requirement': 0, 'pending_orders_count': 0, 'short_market_value': 0, 'stock_long_value': 0, 'total_cash': 0, 'uncleared_funds': 0, 'pending_cash': 0, 'cash': {'cash_available': 0.0, 'sweep': 0, 'unsettled_funds': 0}}
+[2025-11-12 00:49:06] [INFO] 💰 LIVE: total_equity=$0.00, cash.cash_available=$0.00
+[2025-11-12 00:49:06] [DEBUG] Account balance fetch completed
+[2025-11-12 00:49:36] [DEBUG] Starting account balance fetch
+[2025-11-12 00:49:36] [DEBUG] 📤 PAPER API Request: GET https://sandbox.tradier.com/v1/accounts/VA65164161/balances
+[2025-11-12 00:49:37] [DEBUG] 📥 PAPER API Response: Status 200
+[2025-11-12 00:49:37] [DEBUG] 📊 PAPER Raw Balances: {'option_short_value': 0, 'total_equity': 200000.0, 'account_number': 'VA65164161', 'account_type': 'margin', 'close_pl': 0, 'current_requirement': 0, 'equity': 0, 'long_market_value': 0, 'market_value': 0, 'open_pl': 0, 'option_long_value': 0, 'option_requirement': 0, 'pending_orders_count': 0, 'short_market_value': 0, 'stock_long_value': 0, 'total_cash': 200000.0, 'uncleared_funds': 0, 'pending_cash': 0, 'margin': {'fed_call': 0, 'maintenance_call': 0, 'option_buying_power': 200000.0, 'stock_buying_power': 400000.0, 'stock_short_value': 0, 'sweep': 0}}
+[2025-11-12 00:49:37] [INFO] 💰 PAPER: total_equity=$200,000.00, margin.stock_buying_power=$400,000.00
+[2025-11-12 00:49:37] [DEBUG] 📤 LIVE API Request: GET https://api.tradier.com/v1/accounts/6YB66013/balances
+[2025-11-12 00:49:38] [DEBUG] 📥 LIVE API Response: Status 200
+[2025-11-12 00:49:38] [DEBUG] 📊 LIVE Raw Balances: {'option_short_value': 0, 'total_equity': 0, 'account_number': '6YB66013', 'account_type': 'cash', 'close_pl': 0, 'current_requirement': 0, 'equity': 0, 'long_market_value': 0, 'market_value': 0, 'open_pl': 0, 'option_long_value': 0, 'option_requirement': 0, 'pending_orders_count': 0, 'short_market_value': 0, 'stock_long_value': 0, 'total_cash': 0, 'uncleared_funds': 0, 'pending_cash': 0, 'cash': {'cash_available': 0.0, 'sweep': 0, 'unsettled_funds': 0}}
+[2025-11-12 00:49:38] [INFO] 💰 LIVE: total_equity=$0.00, cash.cash_available=$0.00
+[2025-11-12 00:49:38] [DEBUG] Account balance fetch completed
+[2025-11-12 00:50:08] [DEBUG] Starting account balance fetch
+[2025-11-12 00:50:08] [DEBUG] 📤 PAPER API Request: GET https://sandbox.tradier.com/v1/accounts/VA65164161/balances
+[2025-11-12 00:50:09] [DEBUG] 📥 PAPER API Response: Status 200
+[2025-11-12 00:50:09] [DEBUG] 📊 PAPER Raw Balances: {'option_short_value': 0, 'total_equity': 200000.0, 'account_number': 'VA65164161', 'account_type': 'margin', 'close_pl': 0, 'current_requirement': 0, 'equity': 0, 'long_market_value': 0, 'market_value': 0, 'open_pl': 0, 'option_long_value': 0, 'option_requirement': 0, 'pending_orders_count': 0, 'short_market_value': 0, 'stock_long_value': 0, 'total_cash': 200000.0, 'uncleared_funds': 0, 'pending_cash': 0, 'margin': {'fed_call': 0, 'maintenance_call': 0, 'option_buying_power': 200000.0, 'stock_buying_power': 400000.0, 'stock_short_value': 0, 'sweep': 0}}
+[2025-11-12 00:50:09] [INFO] 💰 PAPER: total_equity=$200,000.00, margin.stock_buying_power=$400,000.00
+[2025-11-12 00:50:09] [DEBUG] 📤 LIVE API Request: GET https://api.tradier.com/v1/accounts/6YB66013/balances
+[2025-11-12 00:50:10] [DEBUG] 📥 LIVE API Response: Status 200
+[2025-11-12 00:50:10] [DEBUG] 📊 LIVE Raw Balances: {'option_short_value': 0, 'total_equity': 0, 'account_number': '6YB66013', 'account_type': 'cash', 'close_pl': 0, 'current_requirement': 0, 'equity': 0, 'long_market_value': 0, 'market_value': 0, 'open_pl': 0, 'option_long_value': 0, 'option_requirement': 0, 'pending_orders_count': 0, 'short_market_value': 0, 'stock_long_value': 0, 'total_cash': 0, 'uncleared_funds': 0, 'pending_cash': 0, 'cash': {'cash_available': 0.0, 'sweep': 0, 'unsettled_funds': 0}}
+[2025-11-12 00:50:10] [INFO] 💰 LIVE: total_equity=$0.00, cash.cash_available=$0.00
+[2025-11-12 00:50:10] [DEBUG] Account balance fetch completed
+[2025-11-12 00:50:40] [DEBUG] Starting account balance fetch
+[2025-11-12 00:50:40] [DEBUG] 📤 PAPER API Request: GET https://sandbox.tradier.com/v1/accounts/VA65164161/balances
+[2025-11-12 00:50:41] [DEBUG] 📥 PAPER API Response: Status 200
+[2025-11-12 00:50:41] [DEBUG] 📊 PAPER Raw Balances: {'option_short_value': 0, 'total_equity': 200000.0, 'account_number': 'VA65164161', 'account_type': 'margin', 'close_pl': 0, 'current_requirement': 0, 'equity': 0, 'long_market_value': 0, 'market_value': 0, 'open_pl': 0, 'option_long_value': 0, 'option_requirement': 0, 'pending_orders_count': 0, 'short_market_value': 0, 'stock_long_value': 0, 'total_cash': 200000.0, 'uncleared_funds': 0, 'pending_cash': 0, 'margin': {'fed_call': 0, 'maintenance_call': 0, 'option_buying_power': 200000.0, 'stock_buying_power': 400000.0, 'stock_short_value': 0, 'sweep': 0}}
+[2025-11-12 00:50:41] [INFO] 💰 PAPER: total_equity=$200,000.00, margin.stock_buying_power=$400,000.00
+[2025-11-12 00:50:41] [DEBUG] 📤 LIVE API Request: GET https://api.tradier.com/v1/accounts/6YB66013/balances
+[2025-11-12 00:50:42] [DEBUG] 📥 LIVE API Response: Status 200
+[2025-11-12 00:50:42] [DEBUG] 📊 LIVE Raw Balances: {'option_short_value': 0, 'total_equity': 0, 'account_number': '6YB66013', 'account_type': 'cash', 'close_pl': 0, 'current_requirement': 0, 'equity': 0, 'long_market_value': 0, 'market_value': 0, 'open_pl': 0, 'option_long_value': 0, 'option_requirement': 0, 'pending_orders_count': 0, 'short_market_value': 0, 'stock_long_value': 0, 'total_cash': 0, 'uncleared_funds': 0, 'pending_cash': 0, 'cash': {'cash_available': 0.0, 'sweep': 0, 'unsettled_funds': 0}}
+[2025-11-12 00:50:42] [INFO] 💰 LIVE: total_equity=$0.00, cash.cash_available=$0.00
+[2025-11-12 00:50:42] [DEBUG] Account balance fetch completed

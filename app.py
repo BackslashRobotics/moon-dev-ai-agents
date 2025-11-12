@@ -1,4 +1,4 @@
-# Version 121
+# Version 134
 # ============================================================================
 # VERSION UPDATE CHECKLIST - READ THIS BEFORE EDITING!
 # ============================================================================
@@ -63,7 +63,7 @@ from src.data.cdem.earnings_history_manager import (
 plt.style.use("dark_background")  # Added for Matplotlib dark mode
 
 # Constants
-CONFIG_PATH = "config.json"
+CONFIG_PATH = "app_data/config.json"
 PREFERENCES_PATH = "preferences.json"  # New for settings
 LOG_PATH = os.path.join("logs", "terminal_logs.txt")  # Terminal logs from agent
 APP_LOG_PATH = os.path.join("logs", "app_logs.txt")  # App internal event logs
@@ -404,6 +404,7 @@ class CDEMApp:
         self.all_logs = []  # Persist all log lines for parsing
         self.running = False
         self.blinking = False  # For status blink
+        self.backfill_completed = False  # Track if historical movement backfill has run
 
         # Finnhub client for stock names
         self.finnhub_client = finnhub.Client(api_key=os.getenv("FINNHUB_API_KEY"))
@@ -855,18 +856,21 @@ class CDEMApp:
             return defaults
 
     def apply_loaded_preferences(self):
-        """Apply loaded preferences to UI elements."""
+        """Apply loaded preferences to UI elements comprehensively."""
         try:
             # Apply Terminal Logs preferences
             if hasattr(self, 'logs_text'):
-                font_size = self.preferences.get("logs_tab", {}).get("font_size", 10)
+                logs_prefs = self.preferences.get("logs_tab", {})
+                font_size = logs_prefs.get("font_size", 10)
+                wrap_lines = logs_prefs.get("wrap_lines", False)
                 self.logs_text.config(font=("Courier", font_size))
+                self.logs_text.config(wrap=tk.WORD if wrap_lines else tk.NONE)
             
             # Apply Grok Logs preferences
             if hasattr(self, 'grok_logs_text'):
                 grok_prefs = self.preferences.get("grok_logs_tab", {})
-                font_size = grok_prefs.get("font_size", 9)
-                self.grok_logs_text.config(font=("Courier", font_size))
+                font_size = grok_prefs.get("font_size", 10)
+                self.grok_logs_text.config(font=("Consolas", font_size))
             
             # Apply App Logs preferences
             if hasattr(self, 'app_logs_text'):
@@ -874,16 +878,39 @@ class CDEMApp:
                 font_size = app_logs_prefs.get("font_size", 9)
                 self.app_logs_text.config(font=("Courier", font_size))
             
-            # Apply Config preferences
-            if hasattr(self, 'stock_text'):
+            # Apply Config tab preferences
+            if hasattr(self, 'stock_text') and hasattr(self, 'name_text'):
                 config_prefs = self.preferences.get("config_tab", {})
-                ticker_width = config_prefs.get("stock_text_width", 30)
+                
+                # Text widget dimensions
+                ticker_height = config_prefs.get("stock_text_height", 30)
+                ticker_width = config_prefs.get("stock_text_width", 8)
                 names_width = config_prefs.get("stock_names_width", 30)
-                self.stock_text.config(width=ticker_width)
-                if hasattr(self, 'name_text'):
-                    self.name_text.config(width=names_width)
+                
+                self.stock_text.config(height=ticker_height, width=ticker_width)
+                self.name_text.config(height=ticker_height, width=names_width)
+                
+                # Font sizes
+                ticker_font_size = config_prefs.get("ticker_font_size", 10)
+                name_font_size = config_prefs.get("name_font_size", 9)
+                
+                self.stock_text.config(font=("Courier", ticker_font_size))
+                self.name_text.config(font=("Courier", name_font_size))
             
-            self.log_app_event("SUCCESS", "Preferences applied on startup")
+            # Apply Dashboard preferences
+            if hasattr(self, 'stock_table_text'):
+                dashboard_prefs = self.preferences.get("dashboard_tab", {})
+                table_font_size = dashboard_prefs.get("table_font_size", 10)
+                self.stock_table_text.config(font=("Courier", table_font_size))
+                if hasattr(self, 'stock_table_header'):
+                    self.stock_table_header.config(font=("Courier", table_font_size, "bold"))
+            
+            # Apply Visuals preferences
+            if hasattr(self, 'trade_history_text'):
+                visuals_prefs = self.preferences.get("visuals_tab", {})
+                # Note: Chart sizes are handled separately during chart creation
+            
+            self.log_app_event("SUCCESS", "All preferences applied on startup")
         except Exception as e:
             self.log_app_event("ERROR", f"Error applying preferences: {e}")
 
@@ -1313,15 +1340,9 @@ class CDEMApp:
             insertbackground="white",
             highlightbackground="black",
         )
-        self.tickers_scrollbar = ttk.Scrollbar(tickers_container)
-        # Scrollbar command will be set after name_text is created
+        # No scrollbar for tickers - will be controlled by names scrollbar
         
         self.stock_text.pack(side="left", fill="both", expand=True)
-        self.tickers_scrollbar.pack(side="right", fill="y")
-        
-        # Auto-hide scrollbar when not needed
-        self.stock_text.bind("<Configure>", lambda e: self.update_scrollbar_visibility(self.stock_text, self.tickers_scrollbar))
-        self.update_scrollbar_visibility(self.stock_text, self.tickers_scrollbar)
         
         self.stock_text.tag_config("cyan", foreground="cyan")
         tickers_list = self.config.get("stock_universe", [])
@@ -1338,6 +1359,7 @@ class CDEMApp:
             names_container,
             height=30,
             width=self.preferences["config_tab"].get("stock_names_width", 30),
+            wrap=tk.NONE,
             bg="black",
             fg="white",
             insertbackground="white",
@@ -1349,26 +1371,22 @@ class CDEMApp:
         self.name_text.pack(side="left", fill="both", expand=True)
         self.names_scrollbar.pack(side="right", fill="y")
         
-        # Auto-hide scrollbar when not needed
-        self.name_text.bind("<Configure>", lambda e: self.update_scrollbar_visibility(self.name_text, self.names_scrollbar))
-        self.update_scrollbar_visibility(self.name_text, self.names_scrollbar)
+        # Scrollbar stays visible for stock universe (user preference)
 
-        # Synchronized scrolling setup for tickers and names
+        # Synchronized scrolling setup - names scrollbar controls both widgets
         def sync_scroll(*args):
             """Scroll both ticker and name text widgets together"""
             self.stock_text.yview(*args)
             self.name_text.yview(*args)
         
         def on_scrollbar_move(first, last):
-            """Update both scrollbars when either text widget scrolls"""
-            self.tickers_scrollbar.set(first, last)
+            """Update names scrollbar when either text widget scrolls"""
             self.names_scrollbar.set(first, last)
         
-        # Configure scrollbars to use synchronized scrolling
-        self.tickers_scrollbar.config(command=sync_scroll)
+        # Configure names scrollbar to control both widgets
         self.names_scrollbar.config(command=sync_scroll)
         
-        # Configure text widgets to update both scrollbars
+        # Configure both text widgets to update the names scrollbar
         self.stock_text.config(yscrollcommand=on_scrollbar_move)
         self.name_text.config(yscrollcommand=on_scrollbar_move)
         
@@ -1626,7 +1644,7 @@ Respond with ONLY the hex color code (e.g., #FF6B35). No explanations, just the 
             ticker_upper = ticker.upper()
             if ticker_upper in seen:
                 duplicates.add(ticker_upper)
-            else:
+        else:
                 seen.add(ticker_upper)
                 deduplicated_tickers.append(ticker_upper)
         
@@ -1834,6 +1852,43 @@ Respond with ONLY the hex color code (e.g., #FF6B35). No explanations, just the 
                                          fg="white", insertbackground="white", width=10)
             row = add_setting("Refresh Rate (ms):", refresh_rate_entry,
                             "How often to check for dashboard updates in milliseconds (100-2000)", row)
+            
+            # Table column widths
+            ticker_width_var = tk.IntVar(value=self.preferences["dashboard_tab"].get("ticker_width", 10))
+            ticker_width_entry = tk.Entry(settings_win, textvariable=ticker_width_var, bg="gray20", 
+                                         fg="white", insertbackground="white", width=10)
+            row = add_setting("Ticker Column Width:", ticker_width_entry,
+                            "Character width for ticker column (6-15 recommended)", row)
+            
+            past_width_var = tk.IntVar(value=self.preferences["dashboard_tab"].get("past_width", 15))
+            past_width_entry = tk.Entry(settings_win, textvariable=past_width_var, bg="gray20", 
+                                       fg="white", insertbackground="white", width=10)
+            row = add_setting("Past Column Width:", past_width_entry,
+                            "Character width for past earnings column (10-20 recommended)", row)
+            
+            upcoming_width_var = tk.IntVar(value=self.preferences["dashboard_tab"].get("upcoming_width", 18))
+            upcoming_width_entry = tk.Entry(settings_win, textvariable=upcoming_width_var, bg="gray20", 
+                                           fg="white", insertbackground="white", width=10)
+            row = add_setting("Upcoming Column Width:", upcoming_width_entry,
+                            "Character width for upcoming earnings column (12-25 recommended)", row)
+            
+            trade_time_width_var = tk.IntVar(value=self.preferences["dashboard_tab"].get("trade_time_width", 15))
+            trade_time_width_entry = tk.Entry(settings_win, textvariable=trade_time_width_var, bg="gray20", 
+                                             fg="white", insertbackground="white", width=10)
+            row = add_setting("Trade Time Column Width:", trade_time_width_entry,
+                            "Character width for trade time column (10-20 recommended)", row)
+            
+            sentiment_width_var = tk.IntVar(value=self.preferences["dashboard_tab"].get("sentiment_width", 15))
+            sentiment_width_entry = tk.Entry(settings_win, textvariable=sentiment_width_var, bg="gray20", 
+                                            fg="white", insertbackground="white", width=10)
+            row = add_setting("Sentiment Column Width:", sentiment_width_entry,
+                            "Character width for sentiment column (10-20 recommended)", row)
+            
+            movement_width_var = tk.IntVar(value=self.preferences["dashboard_tab"].get("movement_width", 12))
+            movement_width_entry = tk.Entry(settings_win, textvariable=movement_width_var, bg="gray20", 
+                                           fg="white", insertbackground="white", width=10)
+            row = add_setting("Movement Column Width:", movement_width_entry,
+                            "Character width for movement column (8-15 recommended)", row)
 
             def save():
                 self.preferences["dashboard_tab"]["log_font_size"] = log_font_var.get()
@@ -1842,11 +1897,27 @@ Respond with ONLY the hex color code (e.g., #FF6B35). No explanations, just the 
                 self.preferences["dashboard_tab"]["show_past_earnings"] = show_past_var.get()
                 self.preferences["dashboard_tab"]["max_log_lines"] = max_lines_var.get()
                 self.preferences["dashboard_tab"]["refresh_rate_ms"] = refresh_rate_var.get()
+                self.preferences["dashboard_tab"]["ticker_width"] = ticker_width_var.get()
+                self.preferences["dashboard_tab"]["past_width"] = past_width_var.get()
+                self.preferences["dashboard_tab"]["upcoming_width"] = upcoming_width_var.get()
+                self.preferences["dashboard_tab"]["trade_time_width"] = trade_time_width_var.get()
+                self.preferences["dashboard_tab"]["sentiment_width"] = sentiment_width_var.get()
+                self.preferences["dashboard_tab"]["movement_width"] = movement_width_var.get()
                 self.save_preferences()
                 
                 # Apply changes
                 self.dashboard_logs_text.config(font=("Courier", log_font_var.get()))
                 self.stock_table_text.config(font=("Courier", table_font_var.get()))
+                
+                # Update header with new widths (new column order: Ticker, Upcoming, Trade Time, Sentiment, Past, Movement)
+                header_text = f"{'Ticker':<{ticker_width_var.get()}}{'Upcoming':<{upcoming_width_var.get()}}{'Trade Time':<{trade_time_width_var.get()}}{'Sentiment':<{sentiment_width_var.get()}}{'Past':<{past_width_var.get()}}{'Movement':<{movement_width_var.get()}}"
+                self.stock_table_header.config(state="normal")
+                self.stock_table_header.delete("1.0", tk.END)
+                self.stock_table_header.insert("1.0", header_text)
+                self.stock_table_header.config(state="disabled")
+                
+                # Refresh dashboard table to apply new widths
+                self.update_dashboard_table(skip_backfill=True)
                 settings_win.destroy()
 
         elif tab_name == "visuals_tab":
@@ -2302,18 +2373,65 @@ Respond with ONLY the hex color code (e.g., #FF6B35). No explanations, just the 
   - Green: Positive movement (stock went up)
   - Red: Negative movement (stock went down)
   - Gray: Not yet available (calculated retroactively after earnings)
-  - Data clears 3 days before next earnings"""
+  - Data clears 7 days before next earnings (stored beyond Finnhub's 1-month limit)"""
         
         ToolTip(dashboard_info, dashboard_tooltip)
         
-        # Configure left_frame grid for header and table
-        left_frame.rowconfigure(0, weight=0)  # Header row
-        left_frame.rowconfigure(1, weight=1)  # Table row
+        # Configure left_frame grid for title, status, header and table
+        left_frame.rowconfigure(0, weight=0)  # Title row
+        left_frame.rowconfigure(1, weight=0)  # Status indicator row
+        left_frame.rowconfigure(2, weight=0)  # Column headers row (sticky)
+        left_frame.rowconfigure(3, weight=1)  # Table data row
         left_frame.columnconfigure(0, weight=1)
+        
+        # Dashboard backfill status indicator (hidden by default, shown below title)
+        self.dashboard_status_frame = tk.Frame(left_frame, bg="black")
+        self.dashboard_status_frame.grid(row=1, column=0, sticky="ew", pady=(0, 5))
+        self.dashboard_status_label = tk.Label(
+            self.dashboard_status_frame,
+            text="",
+            bg="black",
+            fg="yellow",
+            font=("Courier", 10, "bold")
+        )
+        self.dashboard_status_label.pack()
+        self.dashboard_status_frame.grid_remove()  # Hidden by default
+
+        # Sticky column headers (fixed at top, doesn't scroll)
+        header_container = tk.Frame(left_frame, bg="black")
+        header_container.grid(row=2, column=0, sticky="ew", pady=(5, 0))
+        
+        self.stock_table_header = tk.Text(
+            header_container,
+            height=1,
+            wrap=tk.NONE,
+            font=("Courier", 10, "bold"),
+            bg="gray20",
+            fg="white",
+            insertbackground="white",
+            highlightbackground="black",
+            relief="flat",
+            state="disabled"  # Read-only
+        )
+        self.stock_table_header.pack(side="left", fill="x", expand=True)
+        
+        # Insert header text (widths will be applied from preferences)
+        ticker_width = self.preferences.get("dashboard_tab", {}).get("ticker_width", 10)
+        past_width = self.preferences.get("dashboard_tab", {}).get("past_width", 15)
+        upcoming_width = self.preferences.get("dashboard_tab", {}).get("upcoming_width", 18)
+        trade_time_width = self.preferences.get("dashboard_tab", {}).get("trade_time_width", 15)
+        sentiment_width = self.preferences.get("dashboard_tab", {}).get("sentiment_width", 15)
+        movement_width = self.preferences.get("dashboard_tab", {}).get("movement_width", 12)
+        
+        # New column order: Ticker, Upcoming, Trade Time, Sentiment, Past, Movement
+        header_text = f"{'Ticker':<{ticker_width}}{'Upcoming':<{upcoming_width}}{'Trade Time':<{trade_time_width}}{'Sentiment':<{sentiment_width}}{'Past':<{past_width}}{'Movement':<{movement_width}}"
+        self.stock_table_header.config(state="normal")
+        self.stock_table_header.insert("1.0", header_text)
+        self.stock_table_header.config(state="disabled")
 
         # Dashboard Table (using tk.Text + ttk.Scrollbar for consistent theming)
         table_container = tk.Frame(left_frame, bg="black")
-        table_container.grid(row=1, column=0, sticky="nsew")
+        table_container.grid(row=3, column=0, sticky="nsew")
         
         self.stock_table_text = tk.Text(
             table_container,
@@ -2340,8 +2458,12 @@ Respond with ONLY the hex color code (e.g., #FF6B35). No explanations, just the 
         self.stock_table_text.tag_config("bad", foreground="red")
         self.stock_table_text.tag_config("pending", foreground="gray")
         self.stock_table_text.tag_config("cyan", foreground="cyan")
+        self.stock_table_text.tag_config("yellow", foreground="yellow")
+        self.stock_table_text.tag_config("lightblue", foreground="lightblue")
+        self.stock_table_text.tag_config("magenta", foreground="magenta")
         self.stock_table_text.tag_config("red_date", foreground="red")
         self.stock_table_text.tag_config("white", foreground="white")
+        self.stock_table_text.tag_config("grey", foreground="gray")
         self.stock_table_text.tag_config("movement_up", foreground="lightgreen")
         self.stock_table_text.tag_config("movement_down", foreground="red")
         self.stock_table_text.tag_config("movement_na", foreground="gray")
@@ -2409,7 +2531,11 @@ Respond with ONLY the hex color code (e.g., #FF6B35). No explanations, just the 
         # Configure color tags
         ANSIParser.configure_tags(self.dashboard_logs_text)
 
-        self.update_dashboard_table()
+        # Initial table load (skip backfill for fast GUI startup)
+        self.update_dashboard_table(skip_backfill=True)
+        
+        # Schedule backfill to run after GUI is visible (1 second delay)
+        self.root.after(1000, lambda: threading.Thread(target=self._backfill_movements_background, daemon=True).start())
 
     def open_terminal(self):
         self.log_app_event("DEBUG", "Opening terminal with conda environment")
@@ -2452,7 +2578,7 @@ Respond with ONLY the hex color code (e.g., #FF6B35). No explanations, just the 
                     response = requests.get(
                         endpoint,
                         headers={"Authorization": f"Bearer {paper_api_key}", "Accept": "application/json"},
-                        timeout=15
+                        timeout=30
                     )
                     
                     self.root.after(0, lambda: self.log_app_event("DEBUG", f"📥 PAPER API Response: Status {response.status_code}"))
@@ -2493,7 +2619,7 @@ Respond with ONLY the hex color code (e.g., #FF6B35). No explanations, just the 
                         pos_response = requests.get(
                             f"https://sandbox.tradier.com/v1/accounts/{paper_account_id}/positions",
                             headers={"Authorization": f"Bearer {paper_api_key}", "Accept": "application/json"},
-                            timeout=15
+                            timeout=30
                         )
                         if pos_response.status_code == 200:
                             pos_data = pos_response.json()
@@ -2530,7 +2656,7 @@ Respond with ONLY the hex color code (e.g., #FF6B35). No explanations, just the 
                     response = requests.get(
                         endpoint,
                         headers={"Authorization": f"Bearer {live_api_key}", "Accept": "application/json"},
-                        timeout=15
+                        timeout=30
                     )
                     
                     self.root.after(0, lambda: self.log_app_event("DEBUG", f"📥 LIVE API Response: Status {response.status_code}"))
@@ -2571,7 +2697,7 @@ Respond with ONLY the hex color code (e.g., #FF6B35). No explanations, just the 
                         pos_response = requests.get(
                             f"https://api.tradier.com/v1/accounts/{live_account_id}/positions",
                             headers={"Authorization": f"Bearer {live_api_key}", "Accept": "application/json"},
-                            timeout=15
+                            timeout=30
                         )
                         if pos_response.status_code == 200:
                             pos_data = pos_response.json()
@@ -2625,62 +2751,95 @@ Respond with ONLY the hex color code (e.g., #FF6B35). No explanations, just the 
         except Exception as e:
             print(f"Error updating account balance UI: {e}")
     
-    def update_dashboard_table(self):
+    def update_dashboard_table(self, skip_backfill=False):
         """Update dashboard table with latest earnings dates and sentiment data."""
         try:
-            from datetime import datetime
-            
-            # Backfill any missing movement calculations
-            try:
-                backfill_missing_movements()
-            except Exception as e:
-                print(f"Warning: Backfill failed: {e}")
+            from datetime import datetime, timedelta
             
             # Load earnings history for movement data
             earnings_history = load_earnings_history()
             
+            # Run backfill ONLY ONCE on first dashboard load (unless explicitly skipped)
+            if not skip_backfill and not self.backfill_completed:
+                threading.Thread(target=self._backfill_movements_background, daemon=True).start()
+            
             # Build new content first to check if update is needed
             new_content_lines = []
             
-            # Build header (Fixed width) - Added Movement % column
-            header = f"{'Ticker':<10}{'Earnings Date':<15}{'Trade Time':<15}{'Sentiment':<15}{'Movement %':<12}\n"
+            # Note: Header is now in separate sticky widget (self.stock_table_header)
+            # No longer need to insert header into scrollable table
 
             # Parse logs for earnings and consensus
-            earnings = {}
+            upcoming_earnings = {}  # {ticker: {"date": "YYYY-MM-DD", "hour": "amc"}}
+            past_earnings = {}  # {ticker: {"date": "YYYY-MM-DD", "hour": "amc"}}
             sentiment = {}
-            trade_times = {}  # Placeholder; parse from entry logs if available
 
             # Parse all_logs for earnings and consensus
             for log in self.all_logs:
                 # Strip ANSI color codes for parsing
                 clean_log = re.sub(r'\x1b\[\d+m', '', log)
                 
-                # Match upcoming earnings: "Found earnings for TICKER on YYYY-MM-DD"
-                earnings_match = re.search(r"Found earnings for (\w+) on (\d{4}-\d{2}-\d{2})", clean_log)
+                # Match upcoming earnings: "Found earnings for TICKER on YYYY-MM-DD (hour)"
+                earnings_match = re.search(r"Found earnings for (\w+) on (\d{4}-\d{2}-\d{2}) \((\w+)\)", clean_log)
                 if earnings_match:
-                    ticker, date = earnings_match.groups()
-                    earnings[ticker] = date
+                    ticker, date, hour = earnings_match.groups()
+                    upcoming_earnings[ticker] = {"date": date, "hour": hour}
                 
-                # Match past earnings: "No upcoming earnings for TICKER (last: YYYY-MM-DD)"
-                past_earnings_match = re.search(r"No upcoming earnings for (\w+) \(last: (\d{4}-\d{2}-\d{2})\)", clean_log)
+                # Match past earnings: "No upcoming earnings for TICKER (last: YYYY-MM-DD hour)"
+                past_earnings_match = re.search(r"No upcoming earnings for (\w+) \(last: (\d{4}-\d{2}-\d{2}) (\w+)\)", clean_log)
                 if past_earnings_match:
-                    ticker, date = past_earnings_match.groups()
-                    # Only use past date if no upcoming date exists
-                    if ticker not in earnings:
-                        earnings[ticker] = date
+                    ticker, date, hour = past_earnings_match.groups()
+                    past_earnings[ticker] = {"date": date, "hour": hour}
 
                 consensus_match = re.search(r"(\w+) consensus is (\w+) \(avg score: (\d+\.\d+)\)", clean_log)
                 if consensus_match:
                     ticker, cons, score = consensus_match.groups()
                     sentiment[ticker] = f"{cons} ({score})"
 
+            # Helper function to format date as MM-DD + hour
+            def format_earnings_date(date_str, hour_str):
+                try:
+                    date_obj = datetime.strptime(date_str, "%Y-%m-%d").date()
+                    hour_upper = hour_str.upper() if hour_str else "AMC"
+                    return f"{date_obj.month:02d}-{date_obj.day:02d} {hour_upper}"
+                except:
+                    return "N/A"
+            
+            # Helper function to calculate trade time based on earnings hour
+            def calculate_trade_time(earnings_date_str, earnings_hour):
+                try:
+                    date_obj = datetime.strptime(earnings_date_str, "%Y-%m-%d").date()
+                    # Trade at market close (4:00 PM ET) the day before earnings
+                    trade_date = date_obj - timedelta(days=1)
+                    return f"{trade_date.month:02d}-{trade_date.day:02d} 4:00PM"
+                except:
+                    return "N/A"
+            
             # Prepare data for sorting
             today = datetime.now().date()
             table_data = []
             
             for ticker in self.config["stock_universe"]:
-                earnings_date = earnings.get(ticker, "N/A")
-                trade_time = trade_times.get(ticker, "N/A")
+                # Get past and upcoming earnings info
+                past_info = past_earnings.get(ticker, {})
+                upcoming_info = upcoming_earnings.get(ticker, {})
+                
+                # Format past earnings
+                if past_info:
+                    past_date_formatted = format_earnings_date(past_info.get("date"), past_info.get("hour"))
+                else:
+                    past_date_formatted = "N/A"
+                
+                # Format upcoming earnings and trade time
+                if upcoming_info:
+                    upcoming_date_formatted = format_earnings_date(upcoming_info.get("date"), upcoming_info.get("hour"))
+                    trade_time = calculate_trade_time(upcoming_info.get("date"), upcoming_info.get("hour"))
+                    upcoming_date_raw = upcoming_info.get("date")
+                else:
+                    upcoming_date_formatted = "N/A"
+                    trade_time = "N/A"
+                    upcoming_date_raw = None
+                
                 sent = sentiment.get(ticker, "Pending")
                 
                 # Get movement data from history
@@ -2701,72 +2860,172 @@ Respond with ONLY the hex color code (e.g., #FF6B35). No explanations, just the 
                 elif "Bad" in sent:
                     tag = "bad"
                 
-                # Determine if earnings date is past or future
-                is_past = False
+                # Determine sort date (prioritize upcoming, fallback to past)
                 sort_date = None
-                if earnings_date != "N/A":
+                has_upcoming = upcoming_date_raw is not None
+                if upcoming_date_raw:
                     try:
-                        date_obj = datetime.strptime(earnings_date, "%Y-%m-%d").date()
-                        is_past = date_obj < today
-                        sort_date = date_obj
+                        sort_date = datetime.strptime(upcoming_date_raw, "%Y-%m-%d").date()
                     except:
                         pass
                 
                 table_data.append({
                     "ticker": ticker,
-                    "date": earnings_date,
+                    "past_earnings": past_date_formatted,
+                    "upcoming_earnings": upcoming_date_formatted,
                     "trade_time": trade_time,
                     "sentiment": sent,
                     "tag": tag,
-                    "is_past": is_past,
+                    "has_upcoming": has_upcoming,
                     "sort_date": sort_date,
                     "movement": movement_str,
                     "movement_tag": movement_tag
                 })
             
-            # Sort: upcoming (soonest first), then past (most recent first)
+            # Sort: upcoming (soonest first), then no-upcoming
             def sort_key(item):
-                if item["sort_date"] is None:
-                    return (2, datetime.max.date())  # N/A dates go last
-                elif item["is_past"]:
-                    return (1, -item["sort_date"].toordinal())  # Past dates, newest first (negative for reverse)
-                else:
+                if item["has_upcoming"] and item["sort_date"]:
                     return (0, item["sort_date"].toordinal())  # Upcoming dates, soonest first
+                else:
+                    return (1, item["ticker"])  # No upcoming, sort alphabetically
             
             table_data.sort(key=sort_key)
             
-            # Build sorted rows as plain text for comparison
-            new_content = header
+            # Get column widths from preferences
+            ticker_width = self.preferences.get("dashboard_tab", {}).get("ticker_width", 10)
+            past_width = self.preferences.get("dashboard_tab", {}).get("past_width", 15)
+            upcoming_width = self.preferences.get("dashboard_tab", {}).get("upcoming_width", 18)
+            trade_time_width = self.preferences.get("dashboard_tab", {}).get("trade_time_width", 15)
+            sentiment_width = self.preferences.get("dashboard_tab", {}).get("sentiment_width", 15)
+            movement_width = self.preferences.get("dashboard_tab", {}).get("movement_width", 12)
+            
+            # Build sorted rows as plain text for comparison (no header)
+            # New column order: Ticker, Upcoming, Trade Time, Sentiment, Past, Movement
+            new_content = ""
             for row in table_data:
-                new_content += f"{row['ticker']:<10}{row['date']:<15}{row['trade_time']:<15}{row['sentiment']:<15}{row['movement']}\n"
+                new_content += f"{row['ticker']:<{ticker_width}}{row['upcoming_earnings']:<{upcoming_width}}{row['trade_time']:<{trade_time_width}}{row['sentiment']:<{sentiment_width}}{row['past_earnings']:<{past_width}}{row['movement']}\n"
             
             # Only update if content changed (prevents flashing)
             current_content = self.stock_table_text.get("1.0", tk.END)
             if new_content.strip() != current_content.strip():
-                # Clear and rebuild with formatting
+                # Save current scroll position before updating
+                scroll_position = self.stock_table_text.yview()
+                
+                # Clear and rebuild with formatting (no header in scrollable area)
                 self.stock_table_text.delete("1.0", tk.END)
-                self.stock_table_text.insert(tk.END, header)
                 
                 for row in table_data:
+                    # New column order: Ticker, Upcoming, Trade Time, Sentiment, Past, Movement
+                    
                     # Ticker in cyan
-                    self.stock_table_text.insert(tk.END, f"{row['ticker']:<10}", "cyan")
-                    # Date in red if past, white if upcoming/N/A
-                    date_tag = "red_date" if row["is_past"] else "white"
-                    self.stock_table_text.insert(tk.END, f"{row['date']:<15}", date_tag)
-                    # Trade time in white
-                    self.stock_table_text.insert(tk.END, f"{row['trade_time']:<15}", "white")
-                    # Sentiment with appropriate color
-                    self.stock_table_text.insert(tk.END, f"{row['sentiment']:<15}", row["tag"])
-                    # Movement with appropriate color
+                    self.stock_table_text.insert(tk.END, f"{row['ticker']:<{ticker_width}}", "cyan")
+                    
+                    # Upcoming earnings in yellow (or grey if N/A)
+                    upcoming_tag = "yellow" if row['upcoming_earnings'] != "N/A" else "grey"
+                    self.stock_table_text.insert(tk.END, f"{row['upcoming_earnings']:<{upcoming_width}}", upcoming_tag)
+                    
+                    # Trade time in lightblue (or grey if N/A)
+                    trade_tag = "lightblue" if row['trade_time'] != "N/A" else "grey"
+                    self.stock_table_text.insert(tk.END, f"{row['trade_time']:<{trade_time_width}}", trade_tag)
+                    
+                    # Sentiment with appropriate color (dynamic: good/mixed/bad/pending)
+                    self.stock_table_text.insert(tk.END, f"{row['sentiment']:<{sentiment_width}}", row["tag"])
+                    
+                    # Past earnings in magenta (or grey if N/A)
+                    past_tag = "magenta" if row['past_earnings'] != "N/A" else "grey"
+                    self.stock_table_text.insert(tk.END, f"{row['past_earnings']:<{past_width}}", past_tag)
+                    
+                    # Movement with appropriate color (dynamic: up/down/na)
                     self.stock_table_text.insert(tk.END, row["movement"], row["movement_tag"])
                     self.stock_table_text.insert(tk.END, "\n")
+                
+                # Restore scroll position after updating
+                self.stock_table_text.yview_moveto(scroll_position[0])
                 
                 # Update scrollbar visibility after content change
                 self.update_scrollbar_visibility(self.stock_table_text, self.table_scrollbar)
 
         except Exception as e:
             print(f"Dashboard table update failed: {e}")
-
+    
+    def _backfill_movements_background(self):
+        """Background thread to backfill missing movement calculations with status animation."""
+        import sys
+        import io
+        from src.data.cdem.earnings_history_manager import load_earnings_history, backfill_missing_movements
+        
+        # Show status indicator
+        self.root.after(0, lambda: self.dashboard_status_frame.grid())
+        self.root.after(0, lambda: self.log_app_event("INFO", "Starting historical movement data backfill"))
+        
+        # Start animation
+        stop_event = threading.Event()
+        animation_thread = threading.Thread(target=self._animate_dashboard_status, args=(stop_event,), daemon=True)
+        animation_thread.start()
+        
+        try:
+            # Load current history to check what needs backfilling
+            history = load_earnings_history()
+            total_tickers = len(history)
+            needs_backfill = sum(1 for entry in history.values() if "price_movement_pct" not in entry)
+            
+            self.root.after(0, lambda: self.log_app_event("INFO", 
+                f"Backfill check: {total_tickers} total tickers, {needs_backfill} need movement data"))
+            
+            if needs_backfill == 0:
+                self.root.after(0, lambda: self.log_app_event("SUCCESS", 
+                    "All historical movement data already loaded - no backfill needed"))
+            else:
+                # Run backfill
+                self.root.after(0, lambda: self.log_app_event("INFO", 
+                    f"Fetching {needs_backfill} missing movement calculations from Grok..."))
+                
+                result = backfill_missing_movements()
+                
+                # Check results
+                history_after = load_earnings_history()
+                completed = sum(1 for entry in history_after.values() if "price_movement_pct" in entry)
+                
+                self.root.after(0, lambda: self.log_app_event("SUCCESS", 
+                    f"Backfill complete: {completed}/{total_tickers} tickers now have movement data"))
+                
+                # Log failed tickers if any
+                if result["failed"] > 0:
+                    failed_list = ", ".join(result["failed_tickers"][:10])
+                    if len(result["failed_tickers"]) > 10:
+                        failed_list += f" (and {len(result['failed_tickers'])-10} more)"
+                    self.root.after(0, lambda fl=failed_list: self.log_app_event("WARNING", 
+                        f"{result['failed']} tickers failed to fetch historical prices: {fl}"))
+            
+            # Reload table after backfill completes
+            self.root.after(0, lambda: self.update_dashboard_table(skip_backfill=True))
+            
+        except Exception as e:
+            error_msg = str(e)
+            self.root.after(0, lambda: self.log_app_event("ERROR", f"Backfill failed: {error_msg}"))
+            print(f"Backfill error: {e}")
+        finally:
+            # Mark backfill as completed (even if some tickers failed)
+            self.backfill_completed = True
+            
+            # Stop animation and hide status
+            stop_event.set()
+            time.sleep(0.6)  # Give animation time to clear
+            self.root.after(0, lambda: self.dashboard_status_frame.grid_remove())
+    
+    def _animate_dashboard_status(self, stop_event):
+        """Animate the dashboard backfill status indicator with cycling dots."""
+        dots = [".", "..", "..."]
+        idx = 0
+        while not stop_event.is_set():
+            self.root.after(0, lambda d=dots[idx]: 
+                self.dashboard_status_label.config(text=f"Loading historical data{d}"))
+            idx = (idx + 1) % len(dots)
+            time.sleep(0.5)  # Update every 0.5 seconds
+        
+        # Clear status when done
+        self.root.after(0, lambda: self.dashboard_status_label.config(text=""))
+    
     def setup_visuals_tab(self):
         tab = ttk.Frame(self.notebook)
         self.notebook.add(tab, text="Visuals")
@@ -2847,24 +3106,25 @@ Respond with ONLY the hex color code (e.g., #FF6B35). No explanations, just the 
         self.exposure_canvas = FigureCanvasTkAgg(self.exposure_fig, exposure_container)
         self.exposure_canvas.get_tk_widget().pack(fill="both", expand=True)
 
-        # === Portfolio Table ===
-        table_frame = tk.Frame(tab, bg='black')  # Changed to tk.Frame with black background
+        # === Portfolio Table (Dashboard-style) ===
+        table_frame = tk.Frame(tab, bg='black')
         table_frame.grid(row=3, column=0, columnspan=2, sticky="nsew", padx=10, pady=5)
-        table_frame.rowconfigure(0, weight=1)
-        table_frame.rowconfigure(1, weight=1)  # Added for tree
+        table_frame.rowconfigure(0, weight=0)  # Title row
+        table_frame.rowconfigure(1, weight=0)  # Header row
+        table_frame.rowconfigure(2, weight=1)  # Data row (expands)
         table_frame.columnconfigure(0, weight=1)
         
-        # Table header with info tooltip
-        header_frame = tk.Frame(table_frame, bg="black")
-        header_frame.grid(row=0, column=0, sticky="w", pady=(0, 5))
+        # Table title with info tooltip
+        title_frame = tk.Frame(table_frame, bg="black")
+        title_frame.grid(row=0, column=0, sticky="w", pady=(0, 5))
         
         table_label = tk.Label(
-            header_frame, text="📊 Trade History", font=("Consolas", 12, "bold"),
+            title_frame, text="📊 Trade History", font=("Consolas", 12, "bold"),
             bg="black", fg="cyan"
         )
         table_label.pack(side="left")
         
-        table_info = ttk.Label(header_frame, text="?", foreground="cyan", background="black", font=("Arial", 10))
+        table_info = tk.Label(title_frame, text="?", foreground="cyan", background="black", font=("Arial", 10))
         table_info.pack(side="left", padx=5)
         
         trade_history_tooltip = """Column Descriptions:
@@ -2880,44 +3140,62 @@ Respond with ONLY the hex color code (e.g., #FF6B35). No explanations, just the 
         
         ToolTip(table_info, trade_history_tooltip)
         
-        self.portfolio_tree = ttk.Treeview(
-            table_frame,
-            columns=("Timestamp", "Ticker", "Size", "Entry", "Current", "PnL", "PnL%", "Status"),
-            show="headings",
-            style="Dark.Treeview",
-            height=8
+        # Sticky column headers (fixed at top, doesn't scroll)
+        header_container = tk.Frame(table_frame, bg="black")
+        header_container.grid(row=1, column=0, sticky="ew", pady=(5, 0))
+        
+        self.trade_history_header = tk.Text(
+            header_container,
+            height=1,
+            wrap=tk.NONE,
+            font=("Courier", 10, "bold"),
+            bg="gray20",
+            fg="white",
+            insertbackground="white",
+            highlightbackground="black",
+            relief="flat",
+            state="disabled"  # Read-only
         )
+        self.trade_history_header.pack(side="left", fill="x", expand=True)
         
-        # Configure columns
-        col_config = {
-            "Timestamp": 140,
-            "Ticker": 80,
-            "Size": 80,
-            "Entry": 80,
-            "Current": 80,
-            "PnL": 90,
-            "PnL%": 80,
-            "Status": 80
-        }
+        # Insert header text
+        header_text = f"{'Timestamp':<20}{'Ticker':<10}{'Size':<10}{'Entry':<12}{'Current':<12}{'PnL':<15}{'PnL%':<12}{'Status':<10}"
+        self.trade_history_header.config(state="normal")
+        self.trade_history_header.insert("1.0", header_text)
+        self.trade_history_header.config(state="disabled")
         
-        for col, width in col_config.items():
-            self.portfolio_tree.heading(col, text=col)
-            self.portfolio_tree.column(col, width=width, anchor="center")
+        # Trade History Table (using tk.Text + ttk.Scrollbar for consistent theming)
+        data_container = tk.Frame(table_frame, bg="black")
+        data_container.grid(row=2, column=0, sticky="nsew")
         
-        # Scrollbar for table
-        scrollbar = ttk.Scrollbar(table_frame, orient="vertical", command=self.portfolio_tree.yview)
-        self.portfolio_tree.configure(yscrollcommand=scrollbar.set)
+        self.trade_history_text = tk.Text(
+            data_container,
+            wrap=tk.NONE,
+            font=("Courier", 10),
+            bg="black",
+            fg="white",
+            insertbackground="white",
+            highlightbackground="black",
+        )
+        self.trade_history_scrollbar = ttk.Scrollbar(data_container, command=self.trade_history_text.yview)
+        self.trade_history_text.config(yscrollcommand=lambda *args: (
+            self.trade_history_scrollbar.set(*args),
+            self.update_scrollbar_visibility(self.trade_history_text, self.trade_history_scrollbar)
+        ))
         
-        self.portfolio_tree.grid(row=1, column=0, sticky="nsew")
-        scrollbar.grid(row=1, column=1, sticky="ns")
+        self.trade_history_text.pack(side="left", fill="both", expand=True)
+        self.trade_history_scrollbar.pack(side="right", fill="y")
         
-        # Configure specific tags FIRST (with backgrounds and foregrounds)
-        self.portfolio_tree.tag_configure("profit", foreground="green", background="black")
-        self.portfolio_tree.tag_configure("loss", foreground="red", background="black")
-        self.portfolio_tree.tag_configure("neutral", foreground="white", background="black")
+        # Auto-hide scrollbar when not needed
+        self.trade_history_text.bind("<Configure>", lambda e: self.update_scrollbar_visibility(self.trade_history_text, self.trade_history_scrollbar))
+        self.update_scrollbar_visibility(self.trade_history_text, self.trade_history_scrollbar)
         
-        # THEN configure default empty tag (order matters!)
-        self.portfolio_tree.tag_configure("", background="black", foreground="white")
+        # Configure color tags for trade history
+        self.trade_history_text.tag_configure("profit", foreground="green")
+        self.trade_history_text.tag_configure("loss", foreground="red")
+        self.trade_history_text.tag_configure("neutral", foreground="white")
+        self.trade_history_text.tag_configure("open", foreground="yellow")
+        self.trade_history_text.tag_configure("closed", foreground="cyan")
 
         self.refresh_visuals()
 
@@ -3146,6 +3424,10 @@ Respond with ONLY the hex color code (e.g., #FF6B35). No explanations, just the 
                     f.write(f"[{timestamp_full}] [{level}] {message}\n")
             except Exception as e:
                 print(f"Failed to write to app log file: {e}")
+            
+            # Skip UI update if widget doesn't exist yet (early initialization)
+            if not hasattr(self, 'app_logs_text'):
+                return
             
             # Enhanced UI formatting with emojis and better structure
             # Map log levels to emojis
@@ -3492,7 +3774,7 @@ Respond with ONLY the hex color code (e.g., #FF6B35). No explanations, just the 
                     response = requests.get(
                         f"{base_url}/accounts/{account_id}/balances",
                         headers={"Authorization": f"Bearer {api_key}", "Accept": "application/json"},
-                        timeout=15
+                        timeout=30
                     )
                     if response.status_code == 200:
                         data = response.json()
@@ -3663,11 +3945,27 @@ Respond with ONLY the hex color code (e.g., #FF6B35). No explanations, just the 
                 self.sentiment_fig.autofmt_xdate()
                 self.sentiment_canvas.draw()
             
-            # Update portfolio table
-            for item in self.portfolio_tree.get_children():
-                self.portfolio_tree.delete(item)
+            # Update trade history table
+            self.trade_history_text.config(state="normal")
+            self.trade_history_text.delete("1.0", tk.END)
+            
             for values, tag in table_rows:
-                self.portfolio_tree.insert("", "end", values=values, tags=(tag, ""))
+                # Format row with proper spacing
+                timestamp, ticker, size, entry, current, pnl, pnl_pct, status = values
+                row_text = f"{timestamp:<20}{ticker:<10}{size:<10}{entry:<12}{current:<12}{pnl:<15}{pnl_pct:<12}{status:<10}\n"
+                
+                # Determine appropriate color tag
+                if tag == "profit":
+                    self.trade_history_text.insert(tk.END, row_text, "profit")
+                elif tag == "loss":
+                    self.trade_history_text.insert(tk.END, row_text, "loss")
+                else:
+                    self.trade_history_text.insert(tk.END, row_text, "neutral")
+            
+            self.trade_history_text.config(state="disabled")
+            
+            # Update scrollbar visibility after content change
+            self.update_scrollbar_visibility(self.trade_history_text, self.trade_history_scrollbar)
             
             # Update exposure pie chart
             self.exposure_ax.clear()
