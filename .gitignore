@@ -75,10 +75,19 @@ logs/  # All log files organized in logs directory
 config.json
 window_position.json
 
+# NOTE: preferences.json is INTENTIONALLY TRACKED
+# This allows users to benefit from the customized app layout and settings.
+# While this may cause occasional merge conflicts, the shared UI experience
+# is valuable for new users. (window_position.json remains ignored)
+
 # CDEM Agent Runtime Data
-src/data/cdem/earnings_history.json
+src/data/cdem/earnings_dates.json  # Renamed from earnings_history.json
 src/data/cdem/sentiment_history.csv
 src/data/cdem/portfolio.csv
+
+# Temporary files
+*.tmp
+app_data/*.tmp
 
 # Test and Development Files
 test_files/

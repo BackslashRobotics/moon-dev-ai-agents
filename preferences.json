@@ -16,18 +16,30 @@
             "Trade Time": 120,
             "Sentiment": 100
         },
-        "log_font_size": 10,
-        "table_font_size": 10,
+        "log_font_size": 8,
+        "table_font_size": 8,
         "auto_scroll": true,
         "show_past_earnings": true,
         "max_log_lines": 1000,
         "refresh_rate_ms": 1000,
-        "ticker_width": 8,
-        "past_width": 12,
-        "upcoming_width": 12,
-        "trade_time_width": 15,
-        "sentiment_width": 15,
-        "movement_width": 12
+        "ticker_width": 7,
+        "past_width": 11,
+        "upcoming_width": 11,
+        "trade_time_width": 14,
+        "sentiment_width": 14,
+        "past_sentiment_width": 13,
+        "movement_width": 11,
+        "table_area_weight": 1,
+        "logs_area_weight": 100,
+        "column_order": [
+            "Ticker",
+            "Upcoming",
+            "Sentiment",
+            "Trade Time",
+            "Past",
+            "Past Sent",
+            "Movement"
+        ]
     },
     "visuals_tab": {
         "chart_size": [
@@ -67,5 +79,13 @@
         "auto_scroll": true,
         "max_entries": 100,
         "show_reasoning": true
+    },
+    "app_logs_tab": {
+        "font_size": 9,
+        "max_lines": 1000,
+        "auto_scroll": true,
+        "show_timestamps": true,
+        "log_level_filter": "ALL",
+        "word_wrap": true
     }
 }
