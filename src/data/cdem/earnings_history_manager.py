@@ -8,6 +8,7 @@ Supports earnings hour (BMC/BMO/AMC) for accurate movement calculations.
 import json
 import os
 import sys
+import threading
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 
@@ -19,6 +20,9 @@ load_dotenv()
 
 # Paths - go up to project root, then into app_data folder
 HISTORY_FILE = os.path.join(os.path.dirname(__file__), "..", "..", "..", "app_data", "earnings_dates.json")
+
+# Thread-safe file operations lock
+EARNINGS_FILE_LOCK = threading.Lock()
 
 # Initialize Grok model for historical price fetching
 try:
@@ -32,38 +36,57 @@ except Exception as e:
 
 
 def load_earnings_history():
-    """Load earnings history from JSON file"""
-    if not os.path.exists(HISTORY_FILE):
-        return {}
-    
-    try:
-        with open(HISTORY_FILE, "r") as f:
-            return json.load(f)
-    except Exception as e:
-        print(f"Error loading earnings history: {e}")
-        return {}
+    """Load earnings history from JSON file (thread-safe)"""
+    with EARNINGS_FILE_LOCK:
+        if not os.path.exists(HISTORY_FILE):
+            return {}
+        
+        try:
+            with open(HISTORY_FILE, "r") as f:
+                content = f.read()
+                if not content or content.strip() == "":
+                    return {}
+                return json.loads(content)
+        except json.JSONDecodeError as e:
+            print(f"Error loading earnings history (JSON decode): {e}")
+            return {}
+        except Exception as e:
+            print(f"Error loading earnings history: {e}")
+            return {}
 
 
 def save_earnings_history(history):
-    """Save earnings history to JSON file"""
-    try:
-        with open(HISTORY_FILE, "w") as f:
-            json.dump(history, f, indent=4)
-    except Exception as e:
-        print(f"Error saving earnings history: {e}")
+    """Save earnings history to JSON file (thread-safe)"""
+    with EARNINGS_FILE_LOCK:
+        try:
+            # Ensure directory exists
+            os.makedirs(os.path.dirname(HISTORY_FILE), exist_ok=True)
+            
+            # Write atomically: write to temp file, then rename
+            temp_file = HISTORY_FILE + ".tmp"
+            with open(temp_file, "w") as f:
+                json.dump(history, f, indent=4)
+                f.flush()
+                os.fsync(f.fileno())
+            
+            # Atomic rename
+            os.replace(temp_file, HISTORY_FILE)
+        except Exception as e:
+            print(f"Error saving earnings history: {e}")
 
 
 def get_historical_price_movement(ticker, earnings_date_str, earnings_hour="amc"):
     """
-    Calculate price movement based on earnings announcement time.
-    - BMC/BMO (before market open): Same day open → close
-    - AMC (after market close): Next day open → close
-    Uses Grok LLM with its real-time knowledge to fetch historical prices.
+    Calculate price movement for the ACTUAL trade window based on earnings timing.
+    Matches the exact buy→sell windows the agent uses:
+    - BMC: Buy @ 3:00 PM → Sell @ 3:55 PM (same day, ~55 min window)
+    - BMO: Buy @ T-1 close → Sell @ T-0 open (overnight gap)
+    - AMC: Buy @ T-0 close → Sell @ T+1 open (overnight gap)
     
     Args:
         ticker: Stock ticker symbol
         earnings_date_str: Earnings date in "YYYY-MM-DD" format
-        earnings_hour: "bmc"/"bmo" (before market) or "amc" (after market close)
+        earnings_hour: "bmc"/"bmo"/"amc"
     
     Returns:
         dict with movement_pct, entry_price, exit_price, or None if failed
@@ -75,27 +98,41 @@ def get_historical_price_movement(ticker, earnings_date_str, earnings_hour="amc"
         # Parse earnings date
         earnings_date = datetime.strptime(earnings_date_str, "%Y-%m-%d").date()
         
-        # Determine which trading session to measure based on earnings hour
-        if earnings_hour in ["bmc", "bmo"]:  # Before market open
-            # Movement = same day open → close
-            system_prompt = """You are a financial data assistant. You have access to historical stock price data.
-Respond ONLY with valid JSON in this exact format: {"open": 123.45, "close": 124.56}
+        # Determine which trading window to measure based on earnings hour
+        if earnings_hour in ["bmc"]:
+            # BMC: Price at 3:00 PM → Close (same day)
+            # Since 3:55 PM is close to 4:00 PM close, we'll use close price as exit
+            system_prompt = """You are a financial data assistant. You have access to historical intraday stock price data.
+Respond ONLY with valid JSON in this exact format: {"entry_price": 123.45, "exit_price": 124.56}
 No additional text, explanations, or formatting. Just the JSON object."""
             
-            user_prompt = f"""Get the opening and closing prices for {ticker} on {earnings_date_str}.
+            user_prompt = f"""Get the price for {ticker} at approximately 3:00 PM ET and the closing price (4:00 PM ET) on {earnings_date_str}.
 If it falls on a weekend or holiday, use the next available trading day.
-Return JSON with the open and close prices."""
+Return JSON with entry_price (3PM price) and exit_price (close price)."""
+            
+        elif earnings_hour in ["bmo"]:
+            # BMO: Previous day close → Earnings day open (overnight gap)
+            prev_day = earnings_date - timedelta(days=1)
+            system_prompt = """You are a financial data assistant. You have access to historical stock price data.
+Respond ONLY with valid JSON in this exact format: {"entry_price": 123.45, "exit_price": 124.56}
+No additional text, explanations, or formatting. Just the JSON object."""
+            
+            user_prompt = f"""Get the closing price for {ticker} on {prev_day.strftime('%Y-%m-%d')} and the opening price on {earnings_date_str}.
+This measures the overnight gap from close to open across earnings.
+If dates fall on weekends/holidays, use the nearest available trading days.
+Return JSON with entry_price (prior day close) and exit_price (earnings day open)."""
             
         else:  # "amc" - After market close
-            # Movement = next day open → close
-            next_trading_date = earnings_date + timedelta(days=1)
+            # AMC: Earnings day close → Next day open (overnight gap)
+            next_day = earnings_date + timedelta(days=1)
             system_prompt = """You are a financial data assistant. You have access to historical stock price data.
-Respond ONLY with valid JSON in this exact format: {"open": 123.45, "close": 124.56}
+Respond ONLY with valid JSON in this exact format: {"entry_price": 123.45, "exit_price": 124.56}
 No additional text, explanations, or formatting. Just the JSON object."""
             
-            user_prompt = f"""Get the opening and closing prices for {ticker} on {next_trading_date.strftime('%Y-%m-%d')} (the day after earnings).
-If it falls on a weekend or holiday, use the next available trading day.
-Return JSON with the open and close prices."""
+            user_prompt = f"""Get the closing price for {ticker} on {earnings_date_str} and the opening price on {next_day.strftime('%Y-%m-%d')}.
+This measures the overnight gap from close to open across earnings.
+If dates fall on weekends/holidays, use the nearest available trading days.
+Return JSON with entry_price (earnings day close) and exit_price (next day open)."""
         
         # Call Grok with timeout protection
         response = None
@@ -116,20 +153,20 @@ Return JSON with the open and close prices."""
         
         # Parse JSON response
         data = json.loads(response.content.strip())
-        open_price = float(data.get("open", 0))
-        close_price = float(data.get("close", 0))
+        entry_price = float(data.get("entry_price", 0))
+        exit_price = float(data.get("exit_price", 0))
         
-        if open_price <= 0 or close_price <= 0:
-            print(f"Invalid price data from Grok for {ticker}: open=${open_price}, close=${close_price}")
+        if entry_price <= 0 or exit_price <= 0:
+            print(f"Invalid price data from Grok for {ticker}: entry=${entry_price}, exit=${exit_price}")
             return None
         
         # Calculate movement percentage
-        movement_pct = ((close_price - open_price) / open_price) * 100
+        movement_pct = ((exit_price - entry_price) / entry_price) * 100
         
         return {
             "movement_pct": round(movement_pct, 2),
-            "entry_price": round(open_price, 2),
-            "exit_price": round(close_price, 2)
+            "entry_price": round(entry_price, 2),
+            "exit_price": round(exit_price, 2)
         }
         
     except json.JSONDecodeError as e:
@@ -306,6 +343,170 @@ def get_ticker_movement(ticker):
     if ticker in history and "price_movement_pct" in history[ticker]:
         return history[ticker]["price_movement_pct"]
     return None
+
+
+def get_historical_sentiment(ticker, earnings_date_str, earnings_hour="amc"):
+    """
+    Calculate historical sentiment as if it was gathered 10 minutes before the trade window.
+    Mimics the CDEM agent's sentiment analysis for historical earnings dates.
+    
+    Trade windows (and thus sentiment gathering times):
+    - BMC: Sentiment gathered on T-0 morning (trade at 3:00 PM same day)
+    - BMO: Sentiment gathered on T-1 afternoon (trade at 3:59 PM T-1)
+    - AMC: Sentiment gathered on T-0 afternoon (trade at 3:59 PM same day)
+    
+    Args:
+        ticker: Stock ticker symbol
+        earnings_date_str: Earnings date in "YYYY-MM-DD" format
+        earnings_hour: "bmc"/"bmo"/"amc"
+    
+    Returns:
+        dict with consensus, sentiment_score, or None if failed
+    """
+    if not grok_model:
+        return None
+    
+    try:
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        
+        earnings_date = datetime.strptime(earnings_date_str, "%Y-%m-%d").date()
+        
+        # Determine when sentiment should have been gathered (matches agent logic)
+        if earnings_hour in ["bmo"]:
+            # BMO: Sentiment on T-1 (day before earnings)
+            sentiment_date = earnings_date - timedelta(days=1)
+        else:  # "amc" or "bmc"
+            # AMC/BMC: Sentiment on T-0 (earnings day)
+            sentiment_date = earnings_date
+        
+        # Build sentiment prompt (matches agent's assess_consensus)
+        prompt = f"""
+Use your up-to-date knowledge to analyze pre-earnings consensus for {ticker} as of {sentiment_date}. Dig deep into available data from sources like X (tweets since {sentiment_date - timedelta(days=1)}), Reddit r/stocks, StockTwits, Seeking Alpha, Bloomberg previews, and options IV data for sentiment.
+Classify as:
+- Good: >70% positive (beat expected, strong growth, hype).
+- Mixed: 40-70% positive (balanced views with risks).
+- Bad: <40% positive (anticipated weakness).
+Detect leaks/hype. Reason step-by-step before classifying. Return as JSON: {{"classification": "Good", "score": 75, "reasoning": "...", "sources": []}}.
+"""
+        system_prompt = "You are a financial sentiment analyst. Respond ONLY with valid JSON for the classification. No additional text, explanations, or formatting."
+        
+        # Run 5 parallel sentiment analyses (matches agent logic)
+        def run_single_sentiment(run_num):
+            """Run one sentiment analysis with retry logic"""
+            for attempt in range(5):  # Up to 5 attempts per run
+                try:
+                    response = grok_model.generate_response(system_prompt, prompt)
+                    if not response or not response.content:
+                        continue
+                    
+                    # Parse JSON
+                    content = response.content.strip()
+                    json_start = content.find('{')
+                    json_end = content.rfind('}')
+                    if json_start == -1 or json_end == -1:
+                        continue
+                    
+                    json_str = content[json_start:json_end+1]
+                    parsed = json.loads(json_str)
+                    score = int(parsed.get("score", 0))
+                    
+                    if 0 <= score <= 100:
+                        return score
+                except:
+                    continue
+            
+            return None
+        
+        # Execute 5 runs in parallel
+        scores = []
+        with ThreadPoolExecutor(max_workers=5) as executor:
+            futures = {executor.submit(run_single_sentiment, i): i for i in range(1, 6)}
+            for future in as_completed(futures):
+                score = future.result()
+                if score is not None:
+                    scores.append(score)
+        
+        if not scores:
+            print(f"❌ Failed to get sentiment for {ticker} on {sentiment_date}")
+            return None
+        
+        # Calculate average and classify
+        avg_score = sum(scores) / len(scores)
+        if avg_score >= 70:
+            consensus = "Good"
+        elif avg_score >= 40:
+            consensus = "Mixed"
+        else:
+            consensus = "Bad"
+        
+        print(f"✅ Historical sentiment for {ticker} ({sentiment_date}): {consensus} ({avg_score:.1f})")
+        
+        return {
+            "consensus": consensus,
+            "sentiment_score": round(avg_score, 2),
+            "sentiment_date": sentiment_date.strftime("%Y-%m-%d"),
+            "scores": scores
+        }
+        
+    except Exception as e:
+        print(f"Error calculating historical sentiment for {ticker}: {e}")
+        return None
+
+
+def backfill_historical_sentiment():
+    """
+    Backfill historical sentiment for past earnings that have movement data.
+    Simulates running sentiment analysis 10 minutes before trade execution.
+    
+    Returns:
+        dict: {"success": int, "failed": int, "failed_tickers": list}
+    """
+    if not grok_model:
+        print("⚠️ Cannot backfill sentiment - Grok model not initialized")
+        return {"success": 0, "failed": 0, "failed_tickers": []}
+    
+    history = load_earnings_history()
+    updated_count = 0
+    failed_count = 0
+    failed_tickers = []
+    
+    for ticker, entry in history.items():
+        # Only backfill for entries that have movement data but no sentiment
+        if "price_movement_pct" not in entry:
+            continue
+        
+        if "sentiment_score" in entry and entry.get("sentiment_score") is not None:
+            continue  # Already has sentiment
+        
+        # Get past earnings info
+        earnings_date_str = entry.get("past_earnings_date")
+        earnings_hour = entry.get("past_earnings_hour", "amc")
+        
+        if not earnings_date_str:
+            continue
+        
+        print(f"Calculating historical sentiment for {ticker} (earnings: {earnings_date_str} {earnings_hour.upper()})...")
+        
+        # Calculate sentiment
+        sentiment_data = get_historical_sentiment(ticker, earnings_date_str, earnings_hour)
+        
+        if sentiment_data:
+            entry["sentiment_score"] = sentiment_data["sentiment_score"]
+            entry["consensus"] = sentiment_data["consensus"]
+            entry["sentiment_date"] = sentiment_data["sentiment_date"]
+            updated_count += 1
+        else:
+            failed_count += 1
+            failed_tickers.append(ticker)
+    
+    if updated_count > 0:
+        save_earnings_history(history)
+        print(f"✅ Backfilled {updated_count} historical sentiment scores")
+    
+    if failed_count > 0:
+        print(f"⚠️ {failed_count} tickers failed sentiment backfill: {', '.join(failed_tickers[:10])}{'...' if len(failed_tickers) > 10 else ''}")
+    
+    return {"success": updated_count, "failed": failed_count, "failed_tickers": failed_tickers}
 
 
 if __name__ == "__main__":

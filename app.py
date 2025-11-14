@@ -1,4 +1,4 @@
-# Version 134
+# Version 143
 # ============================================================================
 # VERSION UPDATE CHECKLIST - READ THIS BEFORE EDITING!
 # ============================================================================
@@ -57,7 +57,8 @@ from utils.window_position import WindowPositionManager
 from src.data.cdem.earnings_history_manager import (
     load_earnings_history,
     get_ticker_movement,
-    backfill_missing_movements
+    backfill_missing_movements,
+    backfill_historical_sentiment
 )
 
 plt.style.use("dark_background")  # Added for Matplotlib dark mode
@@ -405,6 +406,13 @@ class CDEMApp:
         self.running = False
         self.blinking = False  # For status blink
         self.backfill_completed = False  # Track if historical movement backfill has run
+        self.last_table_content = ""  # Track last table content to prevent unnecessary updates
+        self.pending_table_update = None  # Track pending scheduled table updates
+        
+        # Circuit breaker for Tradier API (prevents hammering API when it's down)
+        self.tradier_failure_count = 0
+        self.tradier_circuit_open = False
+        self.tradier_last_failure_time = 0
 
         # Finnhub client for stock names
         self.finnhub_client = finnhub.Client(api_key=os.getenv("FINNHUB_API_KEY"))
@@ -778,7 +786,7 @@ class CDEMApp:
                 is_paper = self.config.get("paper_trading", True)
                 trading_mode = "PAPER TRADING" if is_paper else "⚠  LIVE TRADING  ⚠"
                 mode_color = "yellow" if is_paper else "red"
-                self.trading_mode_label.config(text=f"Mode: {trading_mode}", foreground=mode_color)
+                self.trading_mode_label.config(text=trading_mode, foreground=mode_color)
         except Exception as e:
             print(f"Failed to update trading mode indicator: {e}")
     
@@ -1342,7 +1350,7 @@ class CDEMApp:
         )
         # No scrollbar for tickers - will be controlled by names scrollbar
         
-        self.stock_text.pack(side="left", fill="both", expand=True)
+        self.stock_text.pack(side="left", fill="y")
         
         self.stock_text.tag_config("cyan", foreground="cyan")
         tickers_list = self.config.get("stock_universe", [])
@@ -1368,7 +1376,7 @@ class CDEMApp:
         )
         self.names_scrollbar = ttk.Scrollbar(names_container)
         
-        self.name_text.pack(side="left", fill="both", expand=True)
+        self.name_text.pack(side="left", fill="both", expand=False)
         self.names_scrollbar.pack(side="right", fill="y")
         
         # Scrollbar stays visible for stock universe (user preference)
@@ -1743,8 +1751,24 @@ Respond with ONLY the hex color code (e.g., #FF6B35). No explanations, just the 
             ToolTip(tooltip_label, tooltip_text)
             
             return row_num + 1
+        
+        def add_section_header(section_title, row_num):
+            """Add a visual section divider with title"""
+            # Separator line
+            separator = tk.Frame(settings_win, bg="gray50", height=2)
+            separator.grid(row=row_num, column=0, columnspan=3, sticky="ew", padx=10, pady=(12, 0))
+            
+            # Section title
+            section_label = tk.Label(settings_win, text=section_title, bg="#1a1a1a", fg="yellow", 
+                                    font=("Arial", 10, "bold"))
+            section_label.grid(row=row_num+1, column=0, columnspan=3, sticky="w", padx=10, pady=(5, 8))
+            
+            return row_num + 2
 
         if tab_name == "config_tab":
+            # ===== LAYOUT SECTION =====
+            row = add_section_header("📐  Layout Settings", row)
+            
             # Stock list dimensions
             ticker_width_var = tk.IntVar(value=self.preferences["config_tab"].get("stock_text_width", 15))
             ticker_width_entry = tk.Entry(settings_win, textvariable=ticker_width_var, bg="gray20", fg="white", 
@@ -1757,6 +1781,9 @@ Respond with ONLY the hex color code (e.g., #FF6B35). No explanations, just the 
                                   insertbackground="white", width=10)
             row = add_setting("Stock Names Column Width:", names_width_entry,
                             "Character width of the stock names column (recommended: 25-50)", row)
+            
+            # ===== DISPLAY SECTION =====
+            row = add_section_header("📺  Display Settings", row)
             
             # Font sizes
             ticker_font_var = tk.IntVar(value=self.preferences["config_tab"].get("ticker_font_size", 10))
@@ -1777,6 +1804,9 @@ Respond with ONLY the hex color code (e.g., #FF6B35). No explanations, just the 
                                                bg="#1a1a1a", fg="white", selectcolor="gray20")
             row = add_setting("Auto-Refresh Stock Colors:", auto_refresh_check,
                             "Automatically fetch brand colors for new tickers from Grok", row)
+            
+            # ===== NOTIFICATIONS SECTION =====
+            row = add_section_header("🔔  Notification Settings", row)
             
             # Show save confirmation
             confirm_save_var = tk.BooleanVar(value=self.preferences["config_tab"].get("confirm_save", True))
@@ -1811,6 +1841,9 @@ Respond with ONLY the hex color code (e.g., #FF6B35). No explanations, just the 
                 self.log_app_event("SUCCESS", "Config preferences saved and applied")
 
         elif tab_name == "dashboard_tab":
+            # ===== DISPLAY SECTION =====
+            row = add_section_header("📺  Display Settings", row)
+            
             # Log font size
             log_font_var = tk.IntVar(value=self.preferences["dashboard_tab"].get("log_font_size", 9))
             log_font_entry = tk.Entry(settings_win, textvariable=log_font_var, bg="gray20", 
@@ -1839,6 +1872,9 @@ Respond with ONLY the hex color code (e.g., #FF6B35). No explanations, just the 
             row = add_setting("Show Past Earnings:", show_past_check,
                             "Display past earnings dates in red on the dashboard table", row)
             
+            # ===== PERFORMANCE SECTION =====
+            row = add_section_header("⚡  Performance Settings", row)
+            
             # Max log lines
             max_lines_var = tk.IntVar(value=self.preferences["dashboard_tab"].get("max_log_lines", 1000))
             max_lines_entry = tk.Entry(settings_win, textvariable=max_lines_var, bg="gray20", 
@@ -1852,6 +1888,25 @@ Respond with ONLY the hex color code (e.g., #FF6B35). No explanations, just the 
                                          fg="white", insertbackground="white", width=10)
             row = add_setting("Refresh Rate (ms):", refresh_rate_entry,
                             "How often to check for dashboard updates in milliseconds (100-2000)", row)
+            
+            # ===== LAYOUT SECTION =====
+            row = add_section_header("📐  Layout Settings", row)
+            
+            # Area widths (table vs logs)
+            table_area_weight_var = tk.IntVar(value=self.preferences["dashboard_tab"].get("table_area_weight", 9))
+            table_area_weight_entry = tk.Entry(settings_win, textvariable=table_area_weight_var, bg="gray20", 
+                                              fg="white", insertbackground="white", width=10)
+            row = add_setting("Table Area Width:", table_area_weight_entry,
+                            "Relative width of earnings table area (6-15 recommended, lower = narrower)", row)
+            
+            logs_area_weight_var = tk.IntVar(value=self.preferences["dashboard_tab"].get("logs_area_weight", 21))
+            logs_area_weight_entry = tk.Entry(settings_win, textvariable=logs_area_weight_var, bg="gray20", 
+                                             fg="white", insertbackground="white", width=10)
+            row = add_setting("Logs Area Width:", logs_area_weight_entry,
+                            "Relative width of terminal logs area (15-25 recommended, higher = wider)", row)
+            
+            # ===== COLUMN WIDTHS SECTION =====
+            row = add_section_header("📏  Table Column Widths", row)
             
             # Table column widths
             ticker_width_var = tk.IntVar(value=self.preferences["dashboard_tab"].get("ticker_width", 10))
@@ -1884,11 +1939,75 @@ Respond with ONLY the hex color code (e.g., #FF6B35). No explanations, just the 
             row = add_setting("Sentiment Column Width:", sentiment_width_entry,
                             "Character width for sentiment column (10-20 recommended)", row)
             
+            past_sentiment_width_var = tk.IntVar(value=self.preferences["dashboard_tab"].get("past_sentiment_width", 15))
+            past_sentiment_width_entry = tk.Entry(settings_win, textvariable=past_sentiment_width_var, bg="gray20", 
+                                                 fg="white", insertbackground="white", width=10)
+            row = add_setting("Past Sentiment Column Width:", past_sentiment_width_entry,
+                            "Character width for past sentiment column (10-20 recommended)", row)
+            
             movement_width_var = tk.IntVar(value=self.preferences["dashboard_tab"].get("movement_width", 12))
             movement_width_entry = tk.Entry(settings_win, textvariable=movement_width_var, bg="gray20", 
                                            fg="white", insertbackground="white", width=10)
             row = add_setting("Movement Column Width:", movement_width_entry,
                             "Character width for movement column (8-15 recommended)", row)
+            
+            # ===== COLUMN ORDER SECTION =====
+            row = add_section_header("🔄  Column Reordering", row)
+            
+            # Get current column order
+            current_order = self.preferences["dashboard_tab"].get("column_order", 
+                ["Ticker", "Upcoming", "Trade Time", "Sentiment", "Past", "Past Sent", "Movement"])
+            
+            # Column order listbox
+            tk.Label(settings_win, text="Earnings Dashboard Column Order:", bg="#1a1a1a", fg="white",
+                    font=("Arial", 9)).grid(row=row, column=0, sticky="w", padx=10, pady=(5, 2))
+            
+            column_order_frame = tk.Frame(settings_win, bg="#1a1a1a")
+            column_order_frame.grid(row=row+1, column=0, columnspan=3, sticky="ew", padx=10, pady=(0, 5))
+            
+            columns_listbox = tk.Listbox(column_order_frame, bg="gray20", fg="white", 
+                                        selectbackground="cyan", selectforeground="black",
+                                        height=7, font=("Courier", 9))
+            columns_listbox.pack(side="left", fill="both", expand=True)
+            
+            for col in current_order:
+                columns_listbox.insert(tk.END, col)
+            
+            # Buttons for reordering
+            btn_frame = tk.Frame(column_order_frame, bg="#1a1a1a")
+            btn_frame.pack(side="right", fill="y", padx=(5, 0))
+            
+            def move_up():
+                try:
+                    idx = columns_listbox.curselection()[0]
+                    if idx > 0:
+                        item = columns_listbox.get(idx)
+                        columns_listbox.delete(idx)
+                        columns_listbox.insert(idx-1, item)
+                        columns_listbox.selection_set(idx-1)
+                except:
+                    pass
+            
+            def move_down():
+                try:
+                    idx = columns_listbox.curselection()[0]
+                    if idx < columns_listbox.size() - 1:
+                        item = columns_listbox.get(idx)
+                        columns_listbox.delete(idx)
+                        columns_listbox.insert(idx+1, item)
+                        columns_listbox.selection_set(idx+1)
+                except:
+                    pass
+            
+            tk.Button(btn_frame, text="▲ Up", bg="gray30", fg="white", command=move_up,
+                     width=8).pack(pady=(0, 5))
+            tk.Button(btn_frame, text="▼ Down", bg="gray30", fg="white", command=move_down,
+                     width=8).pack()
+            
+            tk.Label(settings_win, text="Select a column and use ▲/▼ to reorder", bg="#1a1a1a", fg="gray",
+                    font=("Arial", 8, "italic")).grid(row=row+2, column=0, columnspan=3, sticky="w", padx=10, pady=(0, 8))
+            
+            row = row + 3
 
             def save():
                 self.preferences["dashboard_tab"]["log_font_size"] = log_font_var.get()
@@ -1897,36 +2016,71 @@ Respond with ONLY the hex color code (e.g., #FF6B35). No explanations, just the 
                 self.preferences["dashboard_tab"]["show_past_earnings"] = show_past_var.get()
                 self.preferences["dashboard_tab"]["max_log_lines"] = max_lines_var.get()
                 self.preferences["dashboard_tab"]["refresh_rate_ms"] = refresh_rate_var.get()
+                self.preferences["dashboard_tab"]["table_area_weight"] = table_area_weight_var.get()
+                self.preferences["dashboard_tab"]["logs_area_weight"] = logs_area_weight_var.get()
                 self.preferences["dashboard_tab"]["ticker_width"] = ticker_width_var.get()
                 self.preferences["dashboard_tab"]["past_width"] = past_width_var.get()
                 self.preferences["dashboard_tab"]["upcoming_width"] = upcoming_width_var.get()
                 self.preferences["dashboard_tab"]["trade_time_width"] = trade_time_width_var.get()
                 self.preferences["dashboard_tab"]["sentiment_width"] = sentiment_width_var.get()
+                self.preferences["dashboard_tab"]["past_sentiment_width"] = past_sentiment_width_var.get()
                 self.preferences["dashboard_tab"]["movement_width"] = movement_width_var.get()
+                
+                # Save column order from listbox
+                new_column_order = [columns_listbox.get(i) for i in range(columns_listbox.size())]
+                self.preferences["dashboard_tab"]["column_order"] = new_column_order
+                
                 self.save_preferences()
                 
                 # Apply changes
                 self.dashboard_logs_text.config(font=("Courier", log_font_var.get()))
                 self.stock_table_text.config(font=("Courier", table_font_var.get()))
+                self.stock_table_header.config(font=("Courier", table_font_var.get(), "bold"))  # Update header font to match
                 
-                # Update header with new widths (new column order: Ticker, Upcoming, Trade Time, Sentiment, Past, Movement)
-                header_text = f"{'Ticker':<{ticker_width_var.get()}}{'Upcoming':<{upcoming_width_var.get()}}{'Trade Time':<{trade_time_width_var.get()}}{'Sentiment':<{sentiment_width_var.get()}}{'Past':<{past_width_var.get()}}{'Movement':<{movement_width_var.get()}}"
+                # Apply area weight changes immediately
+                self.dashboard_tab.columnconfigure(0, weight=table_area_weight_var.get())
+                self.dashboard_tab.columnconfigure(1, weight=logs_area_weight_var.get())
+                
+                # Build header text using column order
+                width_map = {
+                    "Ticker": ticker_width_var.get(),
+                    "Upcoming": upcoming_width_var.get(),
+                    "Trade Time": trade_time_width_var.get(),
+                    "Sentiment": sentiment_width_var.get(),
+                    "Past": past_width_var.get(),
+                    "Past Sent": past_sentiment_width_var.get(),
+                    "Movement": movement_width_var.get()
+                }
+                
+                header_parts = []
+                for col_name in new_column_order:
+                    width = width_map.get(col_name, 10)
+                    header_parts.append(f"{col_name:<{width}}")
+                header_text = "".join(header_parts)
+                
                 self.stock_table_header.config(state="normal")
                 self.stock_table_header.delete("1.0", tk.END)
                 self.stock_table_header.insert("1.0", header_text)
                 self.stock_table_header.config(state="disabled")
                 
-                # Refresh dashboard table to apply new widths
+                # Refresh dashboard table to apply new widths and column order
                 self.update_dashboard_table(skip_backfill=True)
+                
                 settings_win.destroy()
 
         elif tab_name == "visuals_tab":
+            # ===== PERFORMANCE SECTION =====
+            row = add_section_header("⚡  Performance Settings", row)
+            
             # Chart refresh interval
             refresh_var = tk.IntVar(value=self.preferences["visuals_tab"].get("refresh_interval", 10))
             refresh_entry = tk.Entry(settings_win, textvariable=refresh_var, bg="gray20", 
                                     fg="white", insertbackground="white", width=10)
             row = add_setting("Chart Refresh (seconds):", refresh_entry,
                             "How often to update charts and portfolio data (5-60 seconds)", row)
+            
+            # ===== CHART SETTINGS SECTION =====
+            row = add_section_header("📊  Chart Settings", row)
             
             # Sentiment timeframe
             timeframe_var = tk.IntVar(value=self.preferences["visuals_tab"].get("sentiment_time_frame_days", 30))
@@ -1956,6 +2110,9 @@ Respond with ONLY the hex color code (e.g., #FF6B35). No explanations, just the 
             row = add_setting("Show Exposure Chart:", show_exposure_check,
                             "Display the portfolio exposure pie chart in the visuals tab", row)
             
+            # ===== TRADE HISTORY SECTION =====
+            row = add_section_header("📜  Trade History Settings", row)
+            
             # Max trade history rows
             max_trades_var = tk.IntVar(value=self.preferences["visuals_tab"].get("max_trade_rows", 50))
             max_trades_entry = tk.Entry(settings_win, textvariable=max_trades_var, bg="gray20", 
@@ -1969,6 +2126,64 @@ Respond with ONLY the hex color code (e.g., #FF6B35). No explanations, just the 
                                               bg="#1a1a1a", fg="white", selectcolor="gray20")
             row = add_setting("Show Closed Trades Only:", closed_only_check,
                             "Hide open positions and only show completed trades", row)
+            
+            # ===== COLUMN ORDER SECTION =====
+            row = add_section_header("🔄  Column Reordering", row)
+            
+            # Get current column order
+            trade_history_order = self.preferences["visuals_tab"].get("column_order", 
+                ["Timestamp", "Ticker", "Size", "Entry", "Current", "PnL", "PnL%", "Status"])
+            
+            # Column order listbox
+            tk.Label(settings_win, text="Trade History Column Order:", bg="#1a1a1a", fg="white",
+                    font=("Arial", 9)).grid(row=row, column=0, sticky="w", padx=10, pady=(5, 2))
+            
+            trade_column_order_frame = tk.Frame(settings_win, bg="#1a1a1a")
+            trade_column_order_frame.grid(row=row+1, column=0, columnspan=3, sticky="ew", padx=10, pady=(0, 5))
+            
+            trade_columns_listbox = tk.Listbox(trade_column_order_frame, bg="gray20", fg="white", 
+                                        selectbackground="cyan", selectforeground="black",
+                                        height=8, font=("Courier", 9))
+            trade_columns_listbox.pack(side="left", fill="both", expand=True)
+            
+            for col in trade_history_order:
+                trade_columns_listbox.insert(tk.END, col)
+            
+            # Buttons for reordering
+            trade_btn_frame = tk.Frame(trade_column_order_frame, bg="#1a1a1a")
+            trade_btn_frame.pack(side="right", fill="y", padx=(5, 0))
+            
+            def trade_move_up():
+                try:
+                    idx = trade_columns_listbox.curselection()[0]
+                    if idx > 0:
+                        item = trade_columns_listbox.get(idx)
+                        trade_columns_listbox.delete(idx)
+                        trade_columns_listbox.insert(idx-1, item)
+                        trade_columns_listbox.selection_set(idx-1)
+                except:
+                    pass
+            
+            def trade_move_down():
+                try:
+                    idx = trade_columns_listbox.curselection()[0]
+                    if idx < trade_columns_listbox.size() - 1:
+                        item = trade_columns_listbox.get(idx)
+                        trade_columns_listbox.delete(idx)
+                        trade_columns_listbox.insert(idx+1, item)
+                        trade_columns_listbox.selection_set(idx+1)
+                except:
+                    pass
+            
+            tk.Button(trade_btn_frame, text="▲ Up", bg="gray30", fg="white", command=trade_move_up,
+                     width=8).pack(pady=(0, 5))
+            tk.Button(trade_btn_frame, text="▼ Down", bg="gray30", fg="white", command=trade_move_down,
+                     width=8).pack()
+            
+            tk.Label(settings_win, text="Select a column and use ▲/▼ to reorder", bg="#1a1a1a", fg="gray",
+                    font=("Arial", 8, "italic")).grid(row=row+2, column=0, columnspan=3, sticky="w", padx=10, pady=(0, 8))
+            
+            row = row + 3
 
             def save():
                 self.preferences["visuals_tab"]["refresh_interval"] = refresh_var.get()
@@ -1978,11 +2193,46 @@ Respond with ONLY the hex color code (e.g., #FF6B35). No explanations, just the 
                 self.preferences["visuals_tab"]["show_exposure_chart"] = show_exposure_var.get()
                 self.preferences["visuals_tab"]["max_trade_rows"] = max_trades_var.get()
                 self.preferences["visuals_tab"]["show_closed_only"] = closed_only_var.get()
+                
+                # Save trade history column order from listbox
+                new_trade_column_order = [trade_columns_listbox.get(i) for i in range(trade_columns_listbox.size())]
+                self.preferences["visuals_tab"]["column_order"] = new_trade_column_order
+                
                 self.save_preferences()
+                
+                # Update trade history header with new column order
+                header_parts = []
+                for col_name in new_trade_column_order:
+                    if col_name == "Timestamp":
+                        header_parts.append(f"{col_name:<20}")
+                    elif col_name == "Ticker":
+                        header_parts.append(f"{col_name:<10}")
+                    elif col_name == "Size":
+                        header_parts.append(f"{col_name:<10}")
+                    elif col_name == "Entry":
+                        header_parts.append(f"{col_name:<12}")
+                    elif col_name == "Current":
+                        header_parts.append(f"{col_name:<12}")
+                    elif col_name == "PnL":
+                        header_parts.append(f"{col_name:<15}")
+                    elif col_name == "PnL%":
+                        header_parts.append(f"{col_name:<12}")
+                    elif col_name == "Status":
+                        header_parts.append(f"{col_name:<10}")
+                header_text = "".join(header_parts)
+                
+                self.trade_history_header.config(state="normal")
+                self.trade_history_header.delete("1.0", tk.END)
+                self.trade_history_header.insert("1.0", header_text)
+                self.trade_history_header.config(state="disabled")
+                
                 self.refresh_visuals()
                 settings_win.destroy()
 
         elif tab_name == "logs_tab":
+            # ===== DISPLAY SECTION =====
+            row = add_section_header("📺  Display Settings", row)
+            
             # Font size
             font_var = tk.IntVar(value=self.preferences["logs_tab"].get("font_size", 9))
             font_entry = tk.Entry(settings_win, textvariable=font_var, bg="gray20", 
@@ -1990,19 +2240,25 @@ Respond with ONLY the hex color code (e.g., #FF6B35). No explanations, just the 
             row = add_setting("Font Size:", font_entry,
                             "Font size for terminal logs (8-14 recommended)", row)
             
-            # Grok logs font size
-            grok_font_var = tk.IntVar(value=self.preferences["logs_tab"].get("grok_font_size", 9))
-            grok_font_entry = tk.Entry(settings_win, textvariable=grok_font_var, bg="gray20", 
-                                      fg="white", insertbackground="white", width=10)
-            row = add_setting("Grok Logs Font Size:", grok_font_entry,
-                            "Font size for Grok API logs (8-14 recommended)", row)
+            # Wrap long lines
+            wrap_lines_var = tk.BooleanVar(value=self.preferences["logs_tab"].get("wrap_lines", False))
+            wrap_lines_check = tk.Checkbutton(settings_win, variable=wrap_lines_var, 
+                                             bg="#1a1a1a", fg="white", selectcolor="gray20")
+            row = add_setting("Wrap Long Lines:", wrap_lines_check,
+                            "Wrap long lines instead of showing horizontal scrollbar", row)
+            
+            # ===== BEHAVIOR SECTION =====
+            row = add_section_header("⚙️  Behavior Settings", row)
             
             # Auto-scroll
             auto_scroll_var = tk.BooleanVar(value=self.preferences["logs_tab"].get("auto_scroll", True))
             auto_scroll_check = tk.Checkbutton(settings_win, variable=auto_scroll_var, 
                                               bg="#1a1a1a", fg="white", selectcolor="gray20")
-            row = add_setting("Auto-Scroll Logs:", auto_scroll_check,
+            row = add_setting("Auto-Scroll:", auto_scroll_check,
                             "Automatically scroll to bottom when new log entries appear", row)
+            
+            # ===== PERFORMANCE SECTION =====
+            row = add_section_header("⚡  Performance Settings", row)
             
             # Max lines
             max_lines_var = tk.IntVar(value=self.preferences["logs_tab"].get("max_lines", 2000))
@@ -2010,42 +2266,26 @@ Respond with ONLY the hex color code (e.g., #FF6B35). No explanations, just the 
                                       fg="white", insertbackground="white", width=10)
             row = add_setting("Max Log Lines:", max_lines_entry,
                             "Maximum number of log lines to keep in memory (1000-10000)", row)
-            
-            # Show timestamps
-            show_timestamps_var = tk.BooleanVar(value=self.preferences["logs_tab"].get("show_timestamps", True))
-            show_timestamps_check = tk.Checkbutton(settings_win, variable=show_timestamps_var, 
-                                                  bg="#1a1a1a", fg="white", selectcolor="gray20")
-            row = add_setting("Show Timestamps:", show_timestamps_check,
-                            "Display timestamps for each log entry (Grok logs)", row)
-            
-            # Wrap long lines
-            wrap_lines_var = tk.BooleanVar(value=self.preferences["logs_tab"].get("wrap_lines", False))
-            wrap_lines_check = tk.Checkbutton(settings_win, variable=wrap_lines_var, 
-                                             bg="#1a1a1a", fg="white", selectcolor="gray20")
-            row = add_setting("Wrap Long Lines:", wrap_lines_check,
-                            "Wrap long lines instead of showing horizontal scrollbar", row)
 
             def save():
                 self.preferences["logs_tab"]["font_size"] = font_var.get()
-                self.preferences["logs_tab"]["grok_font_size"] = grok_font_var.get()
                 self.preferences["logs_tab"]["auto_scroll"] = auto_scroll_var.get()
                 self.preferences["logs_tab"]["max_lines"] = max_lines_var.get()
-                self.preferences["logs_tab"]["show_timestamps"] = show_timestamps_var.get()
                 self.preferences["logs_tab"]["wrap_lines"] = wrap_lines_var.get()
                 self.save_preferences()
                 
-                # Apply changes
+                # Apply changes to terminal logs only
                 self.logs_text.config(font=("Courier", font_var.get()))
-                self.grok_logs_text.config(font=("Consolas", grok_font_var.get()))
                 if wrap_lines_var.get():
                     self.logs_text.config(wrap=tk.WORD)
-                    self.grok_logs_text.config(wrap=tk.WORD)
                 else:
                     self.logs_text.config(wrap=tk.NONE)
-                    self.grok_logs_text.config(wrap=tk.NONE)
                 settings_win.destroy()
 
         elif tab_name == "grok_logs_tab":
+            # ===== DISPLAY SECTION =====
+            row = add_section_header("📺  Display Settings", row)
+            
             # Font size
             font_var = tk.IntVar(value=self.preferences.get("grok_logs_tab", {}).get("font_size", 10))
             font_entry = tk.Entry(settings_win, textvariable=font_var, bg="gray20", 
@@ -2075,12 +2315,32 @@ Respond with ONLY the hex color code (e.g., #FF6B35). No explanations, just the 
             row = add_setting("Show Separators:", show_separators_check,
                             "Display separator lines between log entries", row)
             
+            # Show reasoning
+            show_reasoning_var = tk.BooleanVar(value=self.preferences.get("grok_logs_tab", {}).get("show_reasoning", True))
+            show_reasoning_check = tk.Checkbutton(settings_win, variable=show_reasoning_var, 
+                                                 bg="#1a1a1a", fg="white", selectcolor="gray20")
+            row = add_setting("Show Reasoning:", show_reasoning_check,
+                            "Display full reasoning text from Grok responses", row)
+            
+            # Wrap long lines
+            wrap_lines_var = tk.BooleanVar(value=self.preferences.get("grok_logs_tab", {}).get("wrap_lines", True))
+            wrap_lines_check = tk.Checkbutton(settings_win, variable=wrap_lines_var, 
+                                             bg="#1a1a1a", fg="white", selectcolor="gray20")
+            row = add_setting("Wrap Long Lines:", wrap_lines_check,
+                            "Wrap long lines instead of showing horizontal scrollbar", row)
+            
+            # ===== BEHAVIOR SECTION =====
+            row = add_section_header("⚙️  Behavior Settings", row)
+            
             # Auto-scroll
             auto_scroll_var = tk.BooleanVar(value=self.preferences.get("grok_logs_tab", {}).get("auto_scroll", True))
             auto_scroll_check = tk.Checkbutton(settings_win, variable=auto_scroll_var, 
                                               bg="#1a1a1a", fg="white", selectcolor="gray20")
-            row = add_setting("Auto-Scroll Logs:", auto_scroll_check,
+            row = add_setting("Auto-Scroll:", auto_scroll_check,
                             "Automatically scroll to bottom when new log entries appear", row)
+            
+            # ===== PERFORMANCE SECTION =====
+            row = add_section_header("⚡  Performance Settings", row)
             
             # Max entries
             max_entries_var = tk.IntVar(value=self.preferences.get("grok_logs_tab", {}).get("max_entries", 100))
@@ -2088,13 +2348,6 @@ Respond with ONLY the hex color code (e.g., #FF6B35). No explanations, just the 
                                         fg="white", insertbackground="white", width=10)
             row = add_setting("Max Log Entries:", max_entries_entry,
                             "Maximum number of Grok log entries to display (20-500)", row)
-            
-            # Show reasoning
-            show_reasoning_var = tk.BooleanVar(value=self.preferences.get("grok_logs_tab", {}).get("show_reasoning", True))
-            show_reasoning_check = tk.Checkbutton(settings_win, variable=show_reasoning_var, 
-                                                 bg="#1a1a1a", fg="white", selectcolor="gray20")
-            row = add_setting("Show Reasoning:", show_reasoning_check,
-                            "Display full reasoning text from Grok responses", row)
 
             def save():
                 if "grok_logs_tab" not in self.preferences:
@@ -2107,15 +2360,23 @@ Respond with ONLY the hex color code (e.g., #FF6B35). No explanations, just the 
                 self.preferences["grok_logs_tab"]["auto_scroll"] = auto_scroll_var.get()
                 self.preferences["grok_logs_tab"]["max_entries"] = max_entries_var.get()
                 self.preferences["grok_logs_tab"]["show_reasoning"] = show_reasoning_var.get()
+                self.preferences["grok_logs_tab"]["wrap_lines"] = wrap_lines_var.get()
                 self.save_preferences()
                 
                 # Apply changes
                 self.grok_logs_text.config(font=("Consolas", font_var.get()))
                 self.grok_logs_text.tag_config("timestamp", foreground=timestamp_color_var.get())
+                if wrap_lines_var.get():
+                    self.grok_logs_text.config(wrap=tk.WORD)
+                else:
+                    self.grok_logs_text.config(wrap=tk.NONE)
                 self.update_grok_logs()  # Refresh logs with new settings
                 settings_win.destroy()
         
         elif tab_name == "app_logs_tab":
+            # ===== DISPLAY SECTION =====
+            row = add_section_header("📺  Display Settings", row)
+            
             # Font size
             font_var = tk.IntVar(value=self.preferences.get("app_logs_tab", {}).get("font_size", 9))
             font_entry = tk.Entry(settings_win, textvariable=font_var, bg="gray20", 
@@ -2123,12 +2384,22 @@ Respond with ONLY the hex color code (e.g., #FF6B35). No explanations, just the 
             row = add_setting("Font Size:", font_entry,
                             "Font size for app event logs (8-14 recommended)", row)
             
-            # Max log lines (in UI display)
-            max_lines_var = tk.IntVar(value=self.preferences.get("app_logs_tab", {}).get("max_lines", 1000))
-            max_lines_entry = tk.Entry(settings_win, textvariable=max_lines_var, bg="gray20", 
-                                      fg="white", insertbackground="white", width=10)
-            row = add_setting("Max UI Lines:", max_lines_entry,
-                            "Maximum lines to keep in UI display (file still logs all). 500-2000 recommended", row)
+            # Show timestamps
+            show_timestamps_var = tk.BooleanVar(value=self.preferences.get("app_logs_tab", {}).get("show_timestamps", True))
+            show_timestamps_check = tk.Checkbutton(settings_win, variable=show_timestamps_var, 
+                                                   bg="#1a1a1a", fg="white", selectcolor="gray20")
+            row = add_setting("Show Timestamps:", show_timestamps_check,
+                            "Display timestamp for each log entry", row)
+            
+            # Word wrap
+            word_wrap_var = tk.BooleanVar(value=self.preferences.get("app_logs_tab", {}).get("word_wrap", True))
+            word_wrap_check = tk.Checkbutton(settings_win, variable=word_wrap_var, 
+                                            bg="#1a1a1a", fg="white", selectcolor="gray20")
+            row = add_setting("Word Wrap:", word_wrap_check,
+                            "Wrap long lines instead of horizontal scrolling", row)
+            
+            # ===== BEHAVIOR SECTION =====
+            row = add_section_header("⚙️  Behavior Settings", row)
             
             # Auto-scroll
             auto_scroll_var = tk.BooleanVar(value=self.preferences.get("app_logs_tab", {}).get("auto_scroll", True))
@@ -2137,12 +2408,8 @@ Respond with ONLY the hex color code (e.g., #FF6B35). No explanations, just the 
             row = add_setting("Auto-Scroll:", auto_scroll_check,
                             "Automatically scroll to bottom when new events occur", row)
             
-            # Show timestamps
-            show_timestamps_var = tk.BooleanVar(value=self.preferences.get("app_logs_tab", {}).get("show_timestamps", True))
-            show_timestamps_check = tk.Checkbutton(settings_win, variable=show_timestamps_var, 
-                                                   bg="#1a1a1a", fg="white", selectcolor="gray20")
-            row = add_setting("Show Timestamps:", show_timestamps_check,
-                            "Display timestamp for each log entry", row)
+            # ===== FILTERING SECTION =====
+            row = add_section_header("🔍  Filtering Settings", row)
             
             # Log level filter
             log_levels = ["ALL", "DEBUG", "INFO", "SUCCESS", "WARNING", "ERROR"]
@@ -2152,12 +2419,15 @@ Respond with ONLY the hex color code (e.g., #FF6B35). No explanations, just the 
             row = add_setting("Log Level Filter:", log_level_menu,
                             "Show only logs at or above this level (ALL shows everything)", row)
             
-            # Word wrap
-            word_wrap_var = tk.BooleanVar(value=self.preferences.get("app_logs_tab", {}).get("word_wrap", True))
-            word_wrap_check = tk.Checkbutton(settings_win, variable=word_wrap_var, 
-                                            bg="#1a1a1a", fg="white", selectcolor="gray20")
-            row = add_setting("Word Wrap:", word_wrap_check,
-                            "Wrap long lines instead of horizontal scrolling", row)
+            # ===== PERFORMANCE SECTION =====
+            row = add_section_header("⚡  Performance Settings", row)
+            
+            # Max log lines (in UI display)
+            max_lines_var = tk.IntVar(value=self.preferences.get("app_logs_tab", {}).get("max_lines", 1000))
+            max_lines_entry = tk.Entry(settings_win, textvariable=max_lines_var, bg="gray20", 
+                                      fg="white", insertbackground="white", width=10)
+            row = add_setting("Max UI Lines:", max_lines_entry,
+                            "Maximum lines to keep in UI display (file still logs all). 500-2000 recommended", row)
 
             def save():
                 if "app_logs_tab" not in self.preferences:
@@ -2216,6 +2486,7 @@ Respond with ONLY the hex color code (e.g., #FF6B35). No explanations, just the 
     def setup_dashboard_tab(self):
         """Setup dashboard tab with agent status, controls, and live logs."""
         tab = ttk.Frame(self.notebook)
+        self.dashboard_tab = tab  # Store reference for dynamic updates
         self.notebook.add(tab, text="Dashboard")
 
         # Top bar frame with version and settings
@@ -2243,13 +2514,30 @@ Respond with ONLY the hex color code (e.g., #FF6B35). No explanations, just the 
         # Trading mode status indicator (spanning both columns)
         trading_mode = "PAPER TRADING" if self.config.get("paper_trading", True) else "⚠  LIVE TRADING  ⚠"
         mode_color = "yellow" if self.config.get("paper_trading", True) else "red"
-        self.trading_mode_label = ttk.Label(
-            tab,
-            text=f"Mode: {trading_mode}",
-            foreground=mode_color,
+        
+        # Create frame to hold both "Mode:" and the mode value
+        mode_frame = tk.Frame(tab, bg="black")
+        mode_frame.grid(row=1, column=0, columnspan=2, sticky="n", pady=2)
+        
+        # "Mode:" label in grey
+        mode_text_label = tk.Label(
+            mode_frame,
+            text="Mode: ",
+            foreground="grey",
+            bg="black",
             font=("Consolas", 12, "bold")
         )
-        self.trading_mode_label.grid(row=1, column=0, columnspan=2, sticky="n", pady=2)
+        mode_text_label.pack(side="left")
+        
+        # Trading mode value in appropriate color
+        self.trading_mode_label = tk.Label(
+            mode_frame,
+            text=trading_mode,
+            foreground=mode_color,
+            bg="black",
+            font=("Consolas", 12, "bold")
+        )
+        self.trading_mode_label.pack(side="left")
         
         # Account Statistics Frame
         stats_container = ttk.Frame(tab)
@@ -2332,13 +2620,15 @@ Respond with ONLY the hex color code (e.g., #FF6B35). No explanations, just the 
         # Left frame for table (narrowed width)
         left_frame = ttk.Frame(tab)
         left_frame.grid(row=3, column=0, sticky="nsew", padx=10, pady=10)
-        tab.columnconfigure(0, weight=9)  # Adjusted to ~30%
+        table_weight = self.preferences.get("dashboard_tab", {}).get("table_area_weight", 9)
+        tab.columnconfigure(0, weight=table_weight)
         tab.rowconfigure(3, weight=1)
 
         # Right frame for controls and logs (widened)
         right_frame = ttk.Frame(tab)
         right_frame.grid(row=3, column=1, sticky="nsew", padx=10, pady=10)
-        tab.columnconfigure(1, weight=21)  # Adjusted to ~70%
+        logs_weight = self.preferences.get("dashboard_tab", {}).get("logs_area_weight", 21)
+        tab.columnconfigure(1, weight=logs_weight)
 
         # Allow the column to expand and fill the frame width
         right_frame.columnconfigure(0, weight=1)
@@ -2405,7 +2695,7 @@ Respond with ONLY the hex color code (e.g., #FF6B35). No explanations, just the 
             header_container,
             height=1,
             wrap=tk.NONE,
-            font=("Courier", 10, "bold"),
+            font=("Courier", self.preferences.get("dashboard_tab", {}).get("table_font_size", 10), "bold"),
             bg="gray20",
             fg="white",
             insertbackground="white",
@@ -2421,10 +2711,11 @@ Respond with ONLY the hex color code (e.g., #FF6B35). No explanations, just the 
         upcoming_width = self.preferences.get("dashboard_tab", {}).get("upcoming_width", 18)
         trade_time_width = self.preferences.get("dashboard_tab", {}).get("trade_time_width", 15)
         sentiment_width = self.preferences.get("dashboard_tab", {}).get("sentiment_width", 15)
+        past_sentiment_width = self.preferences.get("dashboard_tab", {}).get("past_sentiment_width", 15)
         movement_width = self.preferences.get("dashboard_tab", {}).get("movement_width", 12)
         
-        # New column order: Ticker, Upcoming, Trade Time, Sentiment, Past, Movement
-        header_text = f"{'Ticker':<{ticker_width}}{'Upcoming':<{upcoming_width}}{'Trade Time':<{trade_time_width}}{'Sentiment':<{sentiment_width}}{'Past':<{past_width}}{'Movement':<{movement_width}}"
+        # New column order: Ticker, Upcoming, Trade Time, Sentiment, Past, Past Sent, Movement
+        header_text = f"{'Ticker':<{ticker_width}}{'Upcoming':<{upcoming_width}}{'Trade Time':<{trade_time_width}}{'Sentiment':<{sentiment_width}}{'Past':<{past_width}}{'Past Sent':<{past_sentiment_width}}{'Movement':<{movement_width}}"
         self.stock_table_header.config(state="normal")
         self.stock_table_header.insert("1.0", header_text)
         self.stock_table_header.config(state="disabled")
@@ -2553,9 +2844,33 @@ Respond with ONLY the hex color code (e.g., #FF6B35). No explanations, just the 
         threading.Thread(target=self._update_account_balances_background, daemon=True).start()
     
     def _update_account_balances_background(self):
-        """Background thread: Fetch account balances without blocking UI."""
+        """Background thread: Fetch account balances without blocking UI.
+        Only fetches the active account (paper or live) based on paper_trading setting.
+        Uses circuit breaker pattern to avoid hammering API when it's down.
+        """
         try:
             import requests
+            import time
+            
+            # Circuit breaker check
+            if self.tradier_circuit_open:
+                time_since_failure = time.time() - self.tradier_last_failure_time
+                if time_since_failure < 300:  # 5 minute cooldown
+                    remaining = int(300 - time_since_failure)
+                    self.root.after(0, lambda r=remaining: self.log_app_event("WARNING", 
+                        f"Tradier API circuit breaker OPEN - skipping fetch (retry in {r}s)"))
+                    # Set error state for both accounts
+                    self.root.after(0, lambda: self._update_account_balances_ui(
+                        "Balance: API Unavailable", "Buying Power: Retry in " + str(remaining) + "s", "Open Positions: N/A",
+                        "Balance: API Unavailable", "Buying Power: Retry in " + str(remaining) + "s", "Open Positions: N/A"
+                    ))
+                    self.root.after(30000, self.update_account_balances)
+                    return
+                else:
+                    # Reset circuit breaker after cooldown
+                    self.tradier_circuit_open = False
+                    self.tradier_failure_count = 0
+                    self.root.after(0, lambda: self.log_app_event("INFO", "Tradier API circuit breaker RESET - retrying"))
             
             # Get API keys from environment
             paper_api_key = os.getenv("TRADIER_PAPER_API_KEY")
@@ -2563,14 +2878,23 @@ Respond with ONLY the hex color code (e.g., #FF6B35). No explanations, just the 
             live_api_key = os.getenv("TRADIER_API_KEY")
             live_account_id = os.getenv("TRADIER_ACCOUNT_ID")
             
-            self.root.after(0, lambda: self.log_app_event("DEBUG", "Starting account balance fetch"))
+            # Determine which account to fetch based on paper_trading setting
+            is_paper = self.config.get("paper_trading", True)
             
-            # Fetch Paper Account data
+            self.root.after(0, lambda p=is_paper: self.log_app_event("DEBUG", 
+                f"Fetching {'PAPER' if p else 'LIVE'} account balance only"))
+            
+            # Initialize default values for both accounts
             paper_balance_text = "Balance: N/A"
             paper_buying_power_text = "Buying Power: N/A"
             paper_positions_text = "Open Positions: N/A"
+            live_balance_text = "Balance: N/A"
+            live_buying_power_text = "Buying Power: N/A"
+            live_positions_text = "Open Positions: N/A"
             
-            if paper_api_key and paper_account_id:
+            # Only fetch the ACTIVE account based on paper_trading setting
+            if is_paper and paper_api_key and paper_account_id:
+                # PAPER ACCOUNT FETCH
                 try:
                     endpoint = f"https://sandbox.tradier.com/v1/accounts/{paper_account_id}/balances"
                     self.root.after(0, lambda: self.log_app_event("DEBUG", f"📤 PAPER API Request: GET {endpoint}"))
@@ -2578,7 +2902,7 @@ Respond with ONLY the hex color code (e.g., #FF6B35). No explanations, just the 
                     response = requests.get(
                         endpoint,
                         headers={"Authorization": f"Bearer {paper_api_key}", "Accept": "application/json"},
-                        timeout=30
+                        timeout=10  # Reduced from 30s to 10s
                     )
                     
                     self.root.after(0, lambda: self.log_app_event("DEBUG", f"📥 PAPER API Response: Status {response.status_code}"))
@@ -2619,7 +2943,7 @@ Respond with ONLY the hex color code (e.g., #FF6B35). No explanations, just the 
                         pos_response = requests.get(
                             f"https://sandbox.tradier.com/v1/accounts/{paper_account_id}/positions",
                             headers={"Authorization": f"Bearer {paper_api_key}", "Accept": "application/json"},
-                            timeout=30
+                            timeout=10  # Reduced from 30s to 10s
                         )
                         if pos_response.status_code == 200:
                             pos_data = pos_response.json()
@@ -2636,19 +2960,24 @@ Respond with ONLY the hex color code (e.g., #FF6B35). No explanations, just the 
                             else:
                                 count = 0
                             paper_positions_text = f"Open Positions: {count}"
+                        # Reset failure count on success
+                        self.tradier_failure_count = 0
                     else:
                         self.root.after(0, lambda s=response.status_code: self.log_app_event("ERROR", f"PAPER API Error: Status {s}"))
+                        self._handle_tradier_failure()
                 except Exception as e:
-                    self.root.after(0, lambda err=str(e): self.log_app_event("ERROR", f"PAPER API Exception: {err}"))
-            else:
+                    error_msg = str(e)
+                    self.root.after(0, lambda err=error_msg: self.log_app_event("ERROR", f"PAPER API Exception: {err}"))
+                    self._handle_tradier_failure()
+                    paper_balance_text = "Balance: API Error"
+                    paper_buying_power_text = "Buying Power: Timeout"
+                    paper_positions_text = "Open Positions: N/A"
+            elif is_paper:
                 self.root.after(0, lambda: self.log_app_event("WARNING", "PAPER account credentials not found in .env"))
             
-            # Fetch Live Account data
-            live_balance_text = "Balance: N/A"
-            live_buying_power_text = "Buying Power: N/A"
-            live_positions_text = "Open Positions: N/A"
-            
-            if live_api_key and live_account_id:
+            # Only fetch LIVE account if NOT in paper mode
+            elif not is_paper and live_api_key and live_account_id:
+                # LIVE ACCOUNT FETCH
                 try:
                     endpoint = f"https://api.tradier.com/v1/accounts/{live_account_id}/balances"
                     self.root.after(0, lambda: self.log_app_event("DEBUG", f"📤 LIVE API Request: GET {endpoint}"))
@@ -2656,7 +2985,7 @@ Respond with ONLY the hex color code (e.g., #FF6B35). No explanations, just the 
                     response = requests.get(
                         endpoint,
                         headers={"Authorization": f"Bearer {live_api_key}", "Accept": "application/json"},
-                        timeout=30
+                        timeout=10  # Reduced from 30s to 10s
                     )
                     
                     self.root.after(0, lambda: self.log_app_event("DEBUG", f"📥 LIVE API Response: Status {response.status_code}"))
@@ -2697,7 +3026,7 @@ Respond with ONLY the hex color code (e.g., #FF6B35). No explanations, just the 
                         pos_response = requests.get(
                             f"https://api.tradier.com/v1/accounts/{live_account_id}/positions",
                             headers={"Authorization": f"Bearer {live_api_key}", "Accept": "application/json"},
-                            timeout=30
+                            timeout=10  # Reduced from 30s to 10s
                         )
                         if pos_response.status_code == 200:
                             pos_data = pos_response.json()
@@ -2714,11 +3043,19 @@ Respond with ONLY the hex color code (e.g., #FF6B35). No explanations, just the 
                             else:
                                 count = 0
                             live_positions_text = f"Open Positions: {count}"
+                        # Reset failure count on success
+                        self.tradier_failure_count = 0
                     else:
                         self.root.after(0, lambda s=response.status_code: self.log_app_event("ERROR", f"LIVE API Error: Status {s}"))
+                        self._handle_tradier_failure()
                 except Exception as e:
-                    self.root.after(0, lambda err=str(e): self.log_app_event("ERROR", f"LIVE API Exception: {err}"))
-            else:
+                    error_msg = str(e)
+                    self.root.after(0, lambda err=error_msg: self.log_app_event("ERROR", f"LIVE API Exception: {err}"))
+                    self._handle_tradier_failure()
+                    live_balance_text = "Balance: API Error"
+                    live_buying_power_text = "Buying Power: Timeout"
+                    live_positions_text = "Open Positions: N/A"
+            elif not is_paper:
                 self.root.after(0, lambda: self.log_app_event("WARNING", "LIVE account credentials not found in .env"))
             
             # Schedule UI updates on main thread
@@ -2750,6 +3087,21 @@ Respond with ONLY the hex color code (e.g., #FF6B35). No explanations, just the 
             self.live_positions_label.config(text=live_positions)
         except Exception as e:
             print(f"Error updating account balance UI: {e}")
+    
+    def _handle_tradier_failure(self):
+        """Handle Tradier API failures with circuit breaker logic."""
+        import time
+        self.tradier_failure_count += 1
+        
+        if self.tradier_failure_count >= 3:
+            # Open circuit breaker after 3 consecutive failures
+            self.tradier_circuit_open = True
+            self.tradier_last_failure_time = time.time()
+            self.root.after(0, lambda: self.log_app_event("ERROR", 
+                f"⚠️ Tradier API circuit breaker OPENED after {self.tradier_failure_count} failures - pausing requests for 5 minutes"))
+        else:
+            self.root.after(0, lambda count=self.tradier_failure_count: self.log_app_event("WARNING", 
+                f"Tradier API failure {count}/3 - will open circuit breaker if continues"))
     
     def update_dashboard_table(self, skip_backfill=False):
         """Update dashboard table with latest earnings dates and sentiment data."""
@@ -2807,11 +3159,22 @@ Respond with ONLY the hex color code (e.g., #FF6B35). No explanations, just the 
             
             # Helper function to calculate trade time based on earnings hour
             def calculate_trade_time(earnings_date_str, earnings_hour):
+                """Calculate when CDEM agent should BUY based on earnings announcement time"""
                 try:
                     date_obj = datetime.strptime(earnings_date_str, "%Y-%m-%d").date()
-                    # Trade at market close (4:00 PM ET) the day before earnings
-                    trade_date = date_obj - timedelta(days=1)
-                    return f"{trade_date.month:02d}-{trade_date.day:02d} 4:00PM"
+                    
+                    if earnings_hour in ["bmc"]:
+                        # BMC (Before Market Close): BUY same day at 3:00 PM ET
+                        trade_date = date_obj
+                        return f"{trade_date.month:02d}-{trade_date.day:02d} 3:00PM"
+                    elif earnings_hour in ["bmo"]:
+                        # BMO (Before Market Open): BUY day before at 3:59 PM ET
+                        trade_date = date_obj - timedelta(days=1)
+                        return f"{trade_date.month:02d}-{trade_date.day:02d} 3:59PM"
+                    else:  # "amc" or default
+                        # AMC (After Market Close): BUY same day at 3:59 PM ET
+                        trade_date = date_obj
+                        return f"{trade_date.month:02d}-{trade_date.day:02d} 3:59PM"
                 except:
                     return "N/A"
             
@@ -2824,9 +3187,18 @@ Respond with ONLY the hex color code (e.g., #FF6B35). No explanations, just the 
                 past_info = past_earnings.get(ticker, {})
                 upcoming_info = upcoming_earnings.get(ticker, {})
                 
-                # Format past earnings
+                # Format past earnings - check logs first, then fallback to stored history
                 if past_info:
                     past_date_formatted = format_earnings_date(past_info.get("date"), past_info.get("hour"))
+                elif ticker in earnings_history:
+                    # Load from stored history if not in logs yet
+                    entry = earnings_history[ticker]
+                    stored_date = entry.get("past_earnings_date") or entry.get("last_earnings_date")
+                    stored_hour = entry.get("past_earnings_hour", "amc")
+                    if stored_date:
+                        past_date_formatted = format_earnings_date(stored_date, stored_hour)
+                    else:
+                        past_date_formatted = "N/A"
                 else:
                     past_date_formatted = "N/A"
                 
@@ -2850,6 +3222,23 @@ Respond with ONLY the hex color code (e.g., #FF6B35). No explanations, just the 
                 else:
                     movement_str = "N/A"
                     movement_tag = "movement_na"
+                
+                # Get past sentiment from history (if available)
+                past_sentiment_str = "N/A"
+                past_sentiment_tag = "grey"
+                if ticker in earnings_history:
+                    entry = earnings_history[ticker]
+                    if "consensus" in entry and "sentiment_score" in entry:
+                        consensus = entry["consensus"]
+                        score = entry["sentiment_score"]
+                        past_sentiment_str = f"{consensus} ({score:.1f})"
+                        # Color based on consensus
+                        if consensus == "Good":
+                            past_sentiment_tag = "good"
+                        elif consensus == "Mixed":
+                            past_sentiment_tag = "mixed"
+                        elif consensus == "Bad":
+                            past_sentiment_tag = "bad"
                 
                 # Determine sentiment tag
                 tag = "pending"
@@ -2878,6 +3267,8 @@ Respond with ONLY the hex color code (e.g., #FF6B35). No explanations, just the 
                     "tag": tag,
                     "has_upcoming": has_upcoming,
                     "sort_date": sort_date,
+                    "past_sentiment": past_sentiment_str,
+                    "past_sentiment_tag": past_sentiment_tag,
                     "movement": movement_str,
                     "movement_tag": movement_tag
                 })
@@ -2891,52 +3282,91 @@ Respond with ONLY the hex color code (e.g., #FF6B35). No explanations, just the 
             
             table_data.sort(key=sort_key)
             
-            # Get column widths from preferences
+            # Get column widths and order from preferences
             ticker_width = self.preferences.get("dashboard_tab", {}).get("ticker_width", 10)
             past_width = self.preferences.get("dashboard_tab", {}).get("past_width", 15)
             upcoming_width = self.preferences.get("dashboard_tab", {}).get("upcoming_width", 18)
             trade_time_width = self.preferences.get("dashboard_tab", {}).get("trade_time_width", 15)
             sentiment_width = self.preferences.get("dashboard_tab", {}).get("sentiment_width", 15)
+            past_sentiment_width = self.preferences.get("dashboard_tab", {}).get("past_sentiment_width", 15)
             movement_width = self.preferences.get("dashboard_tab", {}).get("movement_width", 12)
             
+            column_order = self.preferences.get("dashboard_tab", {}).get("column_order", 
+                ["Ticker", "Upcoming", "Trade Time", "Sentiment", "Past", "Past Sent", "Movement"])
+            
+            # Map column names to their data keys and widths
+            column_map = {
+                "Ticker": {"key": "ticker", "width": ticker_width},
+                "Upcoming": {"key": "upcoming_earnings", "width": upcoming_width},
+                "Trade Time": {"key": "trade_time", "width": trade_time_width},
+                "Sentiment": {"key": "sentiment", "width": sentiment_width},
+                "Past": {"key": "past_earnings", "width": past_width},
+                "Past Sent": {"key": "past_sentiment", "width": past_sentiment_width},
+                "Movement": {"key": "movement", "width": movement_width}
+            }
+            
             # Build sorted rows as plain text for comparison (no header)
-            # New column order: Ticker, Upcoming, Trade Time, Sentiment, Past, Movement
             new_content = ""
             for row in table_data:
-                new_content += f"{row['ticker']:<{ticker_width}}{row['upcoming_earnings']:<{upcoming_width}}{row['trade_time']:<{trade_time_width}}{row['sentiment']:<{sentiment_width}}{row['past_earnings']:<{past_width}}{row['movement']}\n"
+                row_parts = []
+                for col_name in column_order:
+                    col_info = column_map.get(col_name, {"key": "ticker", "width": 10})
+                    data_key = col_info["key"]
+                    width = col_info["width"]
+                    value = row.get(data_key, "N/A")
+                    # Movement doesn't get padding at end
+                    if col_name == "Movement":
+                        row_parts.append(value)
+                    else:
+                        row_parts.append(f"{value:<{width}}")
+                new_content += "".join(row_parts) + "\n"
             
-            # Only update if content changed (prevents flashing)
-            current_content = self.stock_table_text.get("1.0", tk.END)
-            if new_content.strip() != current_content.strip():
+            # Only update if content changed (prevents flashing) - compare with stored content for speed
+            if new_content.strip() != self.last_table_content.strip():
                 # Save current scroll position before updating
                 scroll_position = self.stock_table_text.yview()
+                
+                # Suspend automatic redrawing during update
+                self.stock_table_text.config(state="normal")
                 
                 # Clear and rebuild with formatting (no header in scrollable area)
                 self.stock_table_text.delete("1.0", tk.END)
                 
                 for row in table_data:
-                    # New column order: Ticker, Upcoming, Trade Time, Sentiment, Past, Movement
-                    
-                    # Ticker in cyan
-                    self.stock_table_text.insert(tk.END, f"{row['ticker']:<{ticker_width}}", "cyan")
-                    
-                    # Upcoming earnings in yellow (or grey if N/A)
-                    upcoming_tag = "yellow" if row['upcoming_earnings'] != "N/A" else "grey"
-                    self.stock_table_text.insert(tk.END, f"{row['upcoming_earnings']:<{upcoming_width}}", upcoming_tag)
-                    
-                    # Trade time in lightblue (or grey if N/A)
-                    trade_tag = "lightblue" if row['trade_time'] != "N/A" else "grey"
-                    self.stock_table_text.insert(tk.END, f"{row['trade_time']:<{trade_time_width}}", trade_tag)
-                    
-                    # Sentiment with appropriate color (dynamic: good/mixed/bad/pending)
-                    self.stock_table_text.insert(tk.END, f"{row['sentiment']:<{sentiment_width}}", row["tag"])
-                    
-                    # Past earnings in magenta (or grey if N/A)
-                    past_tag = "magenta" if row['past_earnings'] != "N/A" else "grey"
-                    self.stock_table_text.insert(tk.END, f"{row['past_earnings']:<{past_width}}", past_tag)
-                    
-                    # Movement with appropriate color (dynamic: up/down/na)
-                    self.stock_table_text.insert(tk.END, row["movement"], row["movement_tag"])
+                    # Insert columns in user-defined order
+                    for col_name in column_order:
+                        col_info = column_map.get(col_name, {"key": "ticker", "width": 10})
+                        data_key = col_info["key"]
+                        width = col_info["width"]
+                        value = row.get(data_key, "N/A")
+                        
+                        # Determine tag/color for each column type
+                        if col_name == "Ticker":
+                            tag = "cyan"
+                            formatted_value = f"{value:<{width}}"
+                        elif col_name == "Upcoming":
+                            tag = "yellow" if value != "N/A" else "grey"
+                            formatted_value = f"{value:<{width}}"
+                        elif col_name == "Trade Time":
+                            tag = "lightblue" if value != "N/A" else "grey"
+                            formatted_value = f"{value:<{width}}"
+                        elif col_name == "Sentiment":
+                            tag = row.get("tag", "pending")
+                            formatted_value = f"{value:<{width}}"
+                        elif col_name == "Past":
+                            tag = "magenta" if value != "N/A" else "grey"
+                            formatted_value = f"{value:<{width}}"
+                        elif col_name == "Past Sent":
+                            tag = row.get("past_sentiment_tag", "grey")
+                            formatted_value = f"{value:<{width}}"
+                        elif col_name == "Movement":
+                            tag = row.get("movement_tag", "movement_na")
+                            formatted_value = value  # No padding at end
+                        else:
+                            tag = "white"
+                            formatted_value = f"{value:<{width}}"
+                        
+                        self.stock_table_text.insert(tk.END, formatted_value, tag)
                     self.stock_table_text.insert(tk.END, "\n")
                 
                 # Restore scroll position after updating
@@ -2944,6 +3374,9 @@ Respond with ONLY the hex color code (e.g., #FF6B35). No explanations, just the 
                 
                 # Update scrollbar visibility after content change
                 self.update_scrollbar_visibility(self.stock_table_text, self.table_scrollbar)
+                
+                # Store the new content to avoid redundant updates
+                self.last_table_content = new_content
 
         except Exception as e:
             print(f"Dashboard table update failed: {e}")
@@ -3852,18 +4285,18 @@ Respond with ONLY the hex color code (e.g., #FF6B35). No explanations, just the 
                         else:
                             tag = "neutral"
                         
-                        # Format values
+                        # Format values as dict for flexible column ordering
                         timestamp = pd.to_datetime(row["timestamp"]).strftime("%Y-%m-%d %H:%M")
-                        values = (
-                            timestamp,
-                            row["ticker"],
-                            f"{row['position_size']:.2f}",
-                            f"${row['entry_price']:.2f}",
-                            f"${row['current_price']:.2f}",
-                            f"${pnl:.2f}",
-                            f"{pnl_pct:.2f}%",
-                            row["status"].upper()
-                        )
+                        values = {
+                            "Timestamp": timestamp,
+                            "Ticker": row["ticker"],
+                            "Size": f"{row['position_size']:.2f}",
+                            "Entry": f"${row['entry_price']:.2f}",
+                            "Current": f"${row['current_price']:.2f}",
+                            "PnL": f"${pnl:.2f}",
+                            "PnL%": f"{pnl_pct:.2f}%",
+                            "Status": row["status"].upper()
+                        }
                         table_rows.append((values, tag))
                 except Exception as e:
                     print(f"Portfolio table processing error: {e}")
@@ -3949,10 +4382,34 @@ Respond with ONLY the hex color code (e.g., #FF6B35). No explanations, just the 
             self.trade_history_text.config(state="normal")
             self.trade_history_text.delete("1.0", tk.END)
             
+            # Get column order from preferences
+            column_order = self.preferences.get("visuals_tab", {}).get("column_order", 
+                ["Timestamp", "Ticker", "Size", "Entry", "Current", "PnL", "PnL%", "Status"])
+            
+            # Map column names to their widths
+            column_widths = {
+                "Timestamp": 20,
+                "Ticker": 10,
+                "Size": 10,
+                "Entry": 12,
+                "Current": 12,
+                "PnL": 15,
+                "PnL%": 12,
+                "Status": 10
+            }
+            
             for values, tag in table_rows:
-                # Format row with proper spacing
-                timestamp, ticker, size, entry, current, pnl, pnl_pct, status = values
-                row_text = f"{timestamp:<20}{ticker:<10}{size:<10}{entry:<12}{current:<12}{pnl:<15}{pnl_pct:<12}{status:<10}\n"
+                # Format row with proper spacing according to column order
+                row_parts = []
+                for col_name in column_order:
+                    width = column_widths.get(col_name, 10)
+                    value = values.get(col_name, "N/A")
+                    # Status doesn't get padding at end
+                    if col_name == column_order[-1]:  # Last column
+                        row_parts.append(value)
+                    else:
+                        row_parts.append(f"{value:<{width}}")
+                row_text = "".join(row_parts) + "\n"
                 
                 # Determine appropriate color tag
                 if tag == "profit":

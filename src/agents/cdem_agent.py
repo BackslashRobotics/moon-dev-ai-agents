@@ -1,4 +1,4 @@
-# Version: 76
+# Version: 80
 # REMINDER: Increase version number by 1 for every edit to this code.
 """
 Consensus-Driven Earnings Momentum (CDEM) Agent
@@ -53,6 +53,8 @@ import finnhub  # New for earnings calendar and prices
 # from alpaca.trading.models import Position  # For getting positions
 import requests  # For Tradier API
 import schedule
+from apscheduler.schedulers.background import BackgroundScheduler  # For pre-trade re-assessment
+from zoneinfo import ZoneInfo  # For timezone-aware scheduling
 
 # Create a forced-color version of cprint that ALWAYS outputs ANSI codes
 if _force_color:
@@ -341,6 +343,9 @@ class CDEMAgent:
         self.added_tickers_queue = []  # Queue for newly added tickers
         # Buy SPY with all cash if no positions (hybrid baseline)
         self.initialize_spy()
+        # Initialize APScheduler for pre-trade sentiment re-assessment
+        self.scheduler = BackgroundScheduler(timezone=ZoneInfo("America/New_York"))
+        self.scheduler.start()
         cprint("CDEM Agent initialized!", "green")
 
     def load_config(self):
@@ -624,13 +629,16 @@ class CDEMAgent:
                 
                 consensus, score = self.assess_consensus(ticker, earnings_date, earnings_hour)
                 if consensus == "Good":
-                    self.execute_trade(ticker, consensus)
+                    self.execute_trade(ticker, consensus, earnings_date, earnings_hour)
             except Exception as e:
                 cprint(f"Error processing {ticker}: {str(e)}", "red")
                 continue
 
         # Monitor existing trades
         self.monitor_trades()
+        
+        # Schedule pre-trade sentiment re-assessments (10 min before trade windows)
+        self.schedule_pre_trade_assessments()
 
         # Process queued tickers if any
         if self.added_tickers_queue:
@@ -653,7 +661,7 @@ class CDEMAgent:
                     earnings_hour = earnings_info["hour"]
                     consensus, score = self.assess_consensus(ticker, earnings_date, earnings_hour)
                     if consensus == "Good":
-                        self.execute_trade(ticker, consensus)
+                        self.execute_trade(ticker, consensus, earnings_date, earnings_hour)
                 else:
                     # Check for past earnings
                     past_calendar = self.get_past_earnings_bulk([ticker])
@@ -773,13 +781,28 @@ class CDEMAgent:
         return consensus, avg_score
 
     def assess_consensus(self, ticker, earnings_date, earnings_hour="amc"):
-        """Assess consensus 1 day before earnings using Grok LLM with prompt-engineered tools"""
+        """
+        Assess consensus before trade execution using Grok LLM.
+        Timing adjusted based on earnings hour to match trade windows:
+        - BMO: T-1 (sentiment gathered day before, trade at T-1 close)
+        - AMC/BMC: T-0 (sentiment gathered same day, trade during T-0 market)
+        """
         today = datetime.today().date()
-        check_date = earnings_date - timedelta(days=1)
-        cprint(f"Debug: Today {today}, Check date {check_date} for {ticker}", "grey")
+        
+        # Adjust sentiment timing based on earnings hour
+        if earnings_hour in ["bmo"]:
+            # BMO: Gather sentiment T-1 (buy is T-1 at 3:59 PM)
+            check_date = earnings_date - timedelta(days=1)
+            timing_desc = "T-1 (day before earnings)"
+        else:  # "amc" or "bmc"
+            # AMC/BMC: Gather sentiment T-0 (buy is T-0 during market)
+            check_date = earnings_date
+            timing_desc = "T-0 (earnings day)"
+        
+        cprint(f"Debug: Today {today}, Check date {check_date} for {ticker} ({earnings_hour} → {timing_desc})", "grey")
 
         if not self.config["test_mode"] and today != check_date:
-            cprint(f"Skipping {ticker}: Not T-1 day (check_date: {check_date})", "light_grey", end=' ')
+            cprint(f"Skipping {ticker}: Not correct sentiment day (check_date: {check_date}, {timing_desc})", "light_grey", end=' ')
             return None, None
 
         # Build prompts for sentiment analysis
@@ -937,10 +960,85 @@ Detect leaks/hype. Reason step-by-step before classifying. Return as JSON: {{"cl
                 return None
             return {"symbol": ticker, "qty": position_size, "side": "buy"}
 
-    def execute_trade(self, ticker, consensus):
+    def should_enter_trade_now(self, earnings_date, earnings_hour):
+        """
+        Check if current time is appropriate to enter trade based on earnings timing.
+        
+        Trading windows per Grok plan:
+        - BMC: BUY at 3:00 PM ET on earnings day (window: 3:00-3:25 PM)
+        - BMO: BUY at 3:59 PM ET day BEFORE earnings (window: 3:50-4:00 PM)
+        - AMC: BUY at 3:59 PM ET on earnings day (window: 3:50-4:00 PM)
+        
+        Returns: (should_trade: bool, reason: str)
+        """
+        from datetime import datetime, time
+        from zoneinfo import ZoneInfo
+        
+        try:
+            # Get current time in ET
+            et_tz = ZoneInfo("America/New_York")
+            now_et = datetime.now(et_tz)
+            current_date = now_et.date()
+            current_time = now_et.time()
+            
+            # Parse earnings date
+            if isinstance(earnings_date, str):
+                earnings_date_obj = datetime.strptime(earnings_date, "%Y-%m-%d").date()
+            else:
+                earnings_date_obj = earnings_date
+            
+            # Determine trade date and time window based on earnings hour
+            if earnings_hour in ["bmc"]:
+                # BMC: Buy same day between 3:00-3:25 PM ET
+                trade_date = earnings_date_obj
+                window_start = time(15, 0)  # 3:00 PM
+                window_end = time(15, 25)   # 3:25 PM
+                timing_desc = "3:00-3:25 PM ET on earnings day"
+            elif earnings_hour in ["bmo"]:
+                # BMO: Buy day before between 3:50-4:00 PM ET
+                trade_date = earnings_date_obj - timedelta(days=1)
+                window_start = time(15, 50)  # 3:50 PM
+                window_end = time(16, 0)     # 4:00 PM
+                timing_desc = "3:50-4:00 PM ET day before earnings"
+            else:  # "amc" or default
+                # AMC: Buy same day between 3:50-4:00 PM ET
+                trade_date = earnings_date_obj
+                window_start = time(15, 50)  # 3:50 PM
+                window_end = time(16, 0)     # 4:00 PM
+                timing_desc = "3:50-4:00 PM ET on earnings day"
+            
+            # Check if today is the trade date
+            if current_date != trade_date:
+                if current_date < trade_date:
+                    days_until = (trade_date - current_date).days
+                    return False, f"Trade scheduled for {trade_date} ({timing_desc}), {days_until} day(s) away"
+                else:
+                    return False, f"Trade window passed (was {trade_date} {timing_desc})"
+            
+            # Check if we're in the time window
+            if window_start <= current_time <= window_end:
+                return True, f"In trade window ({timing_desc})"
+            elif current_time < window_start:
+                return False, f"Trade window opens at {window_start.strftime('%I:%M %p')} ET"
+            else:
+                return False, f"Trade window closed (was {timing_desc})"
+                
+        except Exception as e:
+            return False, f"Error checking trade timing: {e}"
+
+    def execute_trade(self, ticker, consensus, earnings_date=None, earnings_hour=None):
         """Execute entry if Good, with risk management"""
         if consensus != "Good":
             return
+
+        # Check if it's the right time to trade based on earnings hour
+        if earnings_date and earnings_hour:
+            should_trade, reason = self.should_enter_trade_now(earnings_date, earnings_hour)
+            if not should_trade:
+                cprint(f"Skipping {ticker} trade: {reason}", "yellow")
+                return
+            else:
+                cprint(f"✓ {ticker}: {reason} - executing trade", "cyan")
 
         # Get account information
         account_info = self._get_account_info(ticker)
@@ -1107,13 +1205,19 @@ Detect leaks/hype. Reason step-by-step before classifying. Return as JSON: {{"cl
                     earnings_date = earnings_info["date"]
                     earnings_hour = earnings_info["hour"]
                     
-                    # Calculate exit date based on earnings hour
+                    # Calculate exit date based on earnings hour per Grok plan
+                    # BMC: Buy same day 3PM, Sell same day 3:55PM
+                    # BMO: Buy day before 3:59PM, Sell earnings day 9:30AM
+                    # AMC: Buy same day 3:59PM, Sell next day 9:30AM
                     today = datetime.today().date()
-                    if earnings_hour in ["bmc", "bmo"]:  # Before market open/close
-                        # Movement happens SAME DAY, exit at close same day
+                    if earnings_hour in ["bmc"]:
+                        # Earnings during market: sell same day
                         exit_date = earnings_date
-                    else:  # "amc" - After market close
-                        # Movement happens NEXT DAY, exit at close next day
+                    elif earnings_hour in ["bmo"]:
+                        # Earnings before market open: sell on earnings day (day after buy)
+                        exit_date = earnings_date
+                    else:  # "amc"
+                        # Earnings after close: sell day after earnings
                         exit_date = earnings_date + timedelta(days=1)
                     
                     if today >= exit_date:
@@ -1246,6 +1350,92 @@ Detect leaks/hype. Reason step-by-step before classifying. Return as JSON: {{"cl
 
         # Placeholder: Load historical data, simulate consensus, test returns/win rate/Sharpe
         pass  # Implement full backtest
+    
+    def schedule_pre_trade_assessments(self):
+        """Schedule pre-trade sentiment re-assessments for all upcoming earnings"""
+        # Clear existing pre-trade jobs (avoid duplicates)
+        for job in self.scheduler.get_jobs():
+            if 'pre_trade_assessment' in job.id:
+                job.remove()
+        
+        universe = self.config["stock_universe"]
+        calendar = self.get_earnings_calendar(universe)
+        
+        if not calendar:
+            cprint("No upcoming earnings to schedule pre-trade assessments for.", "cyan")
+            return
+        
+        for ticker, earnings_info in calendar.items():
+            try:
+                earnings_date = earnings_info["date"]
+                earnings_hour = earnings_info["hour"]
+                
+                # Calculate when to run re-assessment (10 minutes before trade window)
+                # Handle both string and date object formats
+                if isinstance(earnings_date, str):
+                    earnings_datetime = datetime.strptime(earnings_date, "%Y-%m-%d")
+                else:
+                    # earnings_date is already a date object
+                    earnings_datetime = datetime.combine(earnings_date, datetime.min.time())
+                
+                et_tz = ZoneInfo("America/New_York")
+                
+                if earnings_hour in ["bmc"]:
+                    # BMC: BUY at 3:00 PM ET same day, re-assess at 2:50 PM
+                    assessment_time = earnings_datetime.replace(hour=14, minute=50, tzinfo=et_tz)
+                elif earnings_hour in ["bmo"]:
+                    # BMO: BUY at 3:59 PM ET day before, re-assess at 3:49 PM day before
+                    assessment_time = (earnings_datetime - timedelta(days=1)).replace(hour=15, minute=49, tzinfo=et_tz)
+                else:  # "amc" or default
+                    # AMC: BUY at 3:59 PM ET same day, re-assess at 3:49 PM
+                    assessment_time = earnings_datetime.replace(hour=15, minute=49, tzinfo=et_tz)
+                
+                # Only schedule if assessment time is in the future
+                now_et = datetime.now(et_tz)
+                if assessment_time > now_et:
+                    # Convert date to string for job args
+                    earnings_date_str = earnings_date if isinstance(earnings_date, str) else earnings_date.strftime("%Y-%m-%d")
+                    
+                    self.scheduler.add_job(
+                        func=self.pre_trade_sentiment_check,
+                        trigger='date',
+                        run_date=assessment_time,
+                        args=[ticker, earnings_date_str, earnings_hour],
+                        id=f'pre_trade_assessment_{ticker}_{earnings_date_str}',
+                        name=f'Pre-trade assessment for {ticker}',
+                        replace_existing=True
+                    )
+                    cprint(f"✓ Scheduled pre-trade assessment for {ticker} at {assessment_time.strftime('%Y-%m-%d %H:%M %Z')}", "cyan")
+                else:
+                    cprint(f"⚠ Assessment time for {ticker} has passed, skipping schedule", "yellow")
+            
+            except Exception as e:
+                cprint(f"Error scheduling pre-trade assessment for {ticker}: {str(e)}", "red")
+                continue
+    
+    def pre_trade_sentiment_check(self, ticker, earnings_date, earnings_hour):
+        """Re-assess sentiment 10 minutes before trade execution"""
+        try:
+            cprint(f"\n{'='*60}", "cyan")
+            cprint(f"🔄 PRE-TRADE RE-ASSESSMENT: {ticker} (Earnings: {earnings_date} {earnings_hour})", "cyan")
+            cprint(f"{'='*60}", "cyan")
+            
+            # Re-run consensus assessment with fresh data
+            consensus, score = self.assess_consensus(ticker, earnings_date, earnings_hour)
+            
+            # Check if we should still trade based on updated sentiment
+            if consensus == "Good":
+                cprint(f"✓ {ticker} consensus remains Good ({score:.1f}) - trade will proceed", "green")
+                # Trade will be executed at scheduled time by the main check loop
+            else:
+                cprint(f"⚠ {ticker} consensus changed to {consensus} ({score:.1f}) - considering cancellation", "yellow")
+                # In a more advanced implementation, you could cancel scheduled trades here
+                # For now, we'll rely on the should_enter_trade_now check to prevent execution
+            
+            cprint(f"{'='*60}\n", "cyan")
+            
+        except Exception as e:
+            cprint(f"Error during pre-trade assessment for {ticker}: {str(e)}", "red")
 
     def run(self):
         """Main loop with scheduling"""
